@@ -33,7 +33,7 @@ function twshop_sanitize_discount_rules_settings( $input ) {
         if ( 'product' === $condition_type ) {
             $condition_values = array_map( 'absint', $raw_condition_values );
         } elseif ( in_array( $condition_type, array( 'category', 'tag' ), true ) ) {
-            $condition_values = array_map( 'sanitize_text_field', $raw_condition_values );
+            $condition_values = twshop_sanitize_term_slugs( $raw_condition_values, 'category' === $condition_type ? 'product_cat' : 'product_tag' );
         } else {
             $condition_values = array();
         }

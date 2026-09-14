@@ -305,6 +305,19 @@ function twshop_sanitize_id_array( $value ) {
     return array_values( array_unique( array_filter( array_map( 'absint', (array) $value ) ) ) );
 }
 
+/**
+ * 折扣規則分類/標籤條件（存 slug）的 sanitize：只保留該分類法下真實存在的 slug。
+ * 不能用 sanitize_text_field()——它會刪掉百分比編碼（%e6%9c%8d…），中文 slug 整個變空字串，
+ * 條件被當成未設定，規則靜默變成全站適用（v25.8.34 修正）。
+ */
+function twshop_sanitize_term_slugs( $values, $taxonomy ) {
+    $values = array_map( 'strval', (array) $values );
+    if ( empty( $values ) ) return array();
+    $existing = get_terms( array( 'taxonomy' => $taxonomy, 'hide_empty' => false, 'fields' => 'slugs' ) );
+    if ( is_wp_error( $existing ) ) return array();
+    return array_values( array_intersect( array_unique( $values ), $existing ) );
+}
+
 // 分類/標籤限制類型 option 的 sanitize callback（register_setting 用）：只允許 category/tag，其餘一律視為「無限制」
 function twshop_sanitize_cat_tag_type( $value ) {
     $value = sanitize_text_field( $value );

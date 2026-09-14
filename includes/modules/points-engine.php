@@ -1323,18 +1323,33 @@ function twshop_refund_points_on_order_cancel( $order_id ) {
     $user_id = $order->get_customer_id();
     if ( ! $user_id ) return;
 
-    $redeemed = (int) get_post_meta( $order_id, '_twshop_points_redeemed', true );
-    if ( $redeemed > 0 && ! get_post_meta( $order_id, '_twshop_points_redeemed_refunded', true ) ) {
-        update_post_meta( $order_id, '_twshop_points_redeemed_refunded', 'yes' );
-        update_post_meta( $order_id, '_twshop_points_redeemed_refunded_amount', $redeemed );
-        twshop_add_points_log( $user_id, $redeemed, '訂單 #' . $order_id . ' 取消/退款，' . twshop_points_term() . '折抵退還' );
-    }
+    // 只處理「尚未被部分退款處理過」的差額：先前 twshop_handle_order_refund_points() 已按比例
+    // 退還/追回的部分記在 *_amount 進度 meta，這裡若直接用全額會重複退還（v25.8.34 修正）。
+    twshop_complete_points_reversal(
+        $order_id, $user_id,
+        '_twshop_points_redeemed', '_twshop_points_redeemed_refunded_amount', '_twshop_points_redeemed_refunded',
+        1, '訂單 #' . $order_id . ' 取消/退款，' . twshop_points_term() . '折抵退還'
+    );
+    twshop_complete_points_reversal(
+        $order_id, $user_id,
+        '_twshop_points_awarded_amount', '_twshop_points_awarded_revoked_amount', '_twshop_points_awarded_revoked',
+        -1, '訂單 #' . $order_id . ' 取消/退款，追回消費回饋' . twshop_points_term()
+    );
+}
 
-    $awarded = (int) get_post_meta( $order_id, '_twshop_points_awarded_amount', true );
-    if ( $awarded > 0 && ! get_post_meta( $order_id, '_twshop_points_awarded_revoked', true ) ) {
-        update_post_meta( $order_id, '_twshop_points_awarded_revoked', 'yes' );
-        update_post_meta( $order_id, '_twshop_points_awarded_revoked_amount', $awarded );
-        twshop_add_points_log( $user_id, -$awarded, '訂單 #' . $order_id . ' 取消/退款，追回消費回饋' . twshop_points_term() );
+function twshop_complete_points_reversal( $order_id, $user_id, $base_meta, $progress_meta, $done_flag_meta, $sign, $reason ) {
+    if ( get_post_meta( $order_id, $done_flag_meta, true ) ) return;
+
+    $base = (int) get_post_meta( $order_id, $base_meta, true );
+    if ( $base <= 0 ) return;
+
+    $already = (int) get_post_meta( $order_id, $progress_meta, true );
+    $delta   = $base - $already;
+
+    update_post_meta( $order_id, $done_flag_meta, 'yes' );
+    update_post_meta( $order_id, $progress_meta, $base );
+    if ( $delta > 0 ) {
+        twshop_add_points_log( $user_id, $sign * $delta, $reason );
     }
 }
 

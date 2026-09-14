@@ -249,7 +249,13 @@ function twshop_apply_tier_change( WP_User $user, $new_tier, $is_upgrade ) {
 
     if ( in_array( $new_role, $user->roles, true ) ) return;
 
-    foreach ( $user->roles as $role ) { $user->remove_role( $role ); }
+    // 只替換「會員等級角色＋customer」，其他角色（其他外掛的角色、員工角色）一律保留（v25.8.34 修正：
+    // 原本移除全部角色，員工帳號消費達標會失去後台權限）。
+    $tier_roles = wp_list_pluck( (array) get_option( 'wc_member_tiers_settings', array() ), 'slug' );
+    $tier_roles[] = 'customer';
+    foreach ( $user->roles as $role ) {
+        if ( in_array( $role, $tier_roles, true ) ) $user->remove_role( $role );
+    }
     $user->add_role( $new_role );
 
     if ( $is_upgrade && $new_tier ) {
@@ -317,13 +323,15 @@ function twshop_recalculate_user_tier( $user_id ) {
     $is_calculating = true;
 
     $user = new WP_User( $user_id );
-    if ( in_array( 'administrator', (array) $user->roles ) || in_array( 'editor', (array) $user->roles ) ) {
+    if ( ! $user->exists() || user_can( $user, 'manage_woocommerce' ) || user_can( $user, 'edit_posts' ) ) {
         $is_calculating = false;
         return;
     }
 
     $tiers = get_option( 'wc_member_tiers_settings', array() );
-    if( empty($tiers) ) { $is_calculating = false; return; }
+    if( empty($tiers) || ! is_array( $tiers ) ) { $is_calculating = false; return; }
+    // 判定依門檻由高到低，不依賴後台卡片排列順序（C16）。
+    usort( $tiers, function( $a, $b ) { return (int) ( $b['threshold'] ?? 0 ) <=> (int) ( $a['threshold'] ?? 0 ); } );
 
     $current_tier = null;
     foreach ( $tiers as $tier ) {

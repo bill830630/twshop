@@ -295,9 +295,9 @@ function twshop_ajax_save_rule() {
     if ( $condition_type === 'product' ) {
         $condition_values = array_map( 'absint', (array) ( $_POST['condition_values_product'] ?? array() ) );
     } elseif ( $condition_type === 'category' ) {
-        $condition_values = array_map( 'sanitize_text_field', wp_unslash( (array) ( $_POST['condition_values_category'] ?? array() ) ) );
+        $condition_values = twshop_sanitize_term_slugs( wp_unslash( (array) ( $_POST['condition_values_category'] ?? array() ) ), 'product_cat' );
     } elseif ( $condition_type === 'tag' ) {
-        $condition_values = array_map( 'sanitize_text_field', wp_unslash( (array) ( $_POST['condition_values_tag'] ?? array() ) ) );
+        $condition_values = twshop_sanitize_term_slugs( wp_unslash( (array) ( $_POST['condition_values_tag'] ?? array() ) ), 'product_tag' );
     } else {
         $condition_values = array();
     }

@@ -33,6 +33,13 @@ function twshop_is_discount_rule_valid( $rule, $user_roles, $cart_total = 0, $pr
     $user_roles = (array) $user_roles;
     $cache_key = ( $rule['rule_id'] ?? '' ) . '|' . ( $rule['is_coupon'] ?? '' ) . '|' . ( $rule['c_code'] ?? '' ) . '|' . ( $rule['c_exclusive'] ?? '' )
         . '|' . $product_id . '|' . get_current_user_id() . '|' . implode( ',', $user_roles ) . '|' . $cart_total;
+    // 購物車層判斷（$product_id = 0）且規則有條件時，結果取決於購物車內容，同一請求內內容可能變動。
+    if ( 0 === (int) $product_id ) {
+        list( $cond_type, $cond_values ) = twshop_get_rule_condition( $rule );
+        if ( ! empty( $cond_type ) && ! empty( $cond_values ) ) {
+            $cache_key .= '|' . twshop_cart_condition_fingerprint();
+        }
+    }
     if ( array_key_exists( $cache_key, $cache ) ) return $cache[ $cache_key ];
 
     $result = twshop_is_discount_rule_valid_compute( $rule, $user_roles, $cart_total, $product_id );
@@ -88,6 +95,39 @@ function twshop_has_term_cached( $terms, $taxonomy, $product_id ) {
     return false;
 }
 
+function twshop_rule_condition_matches_product( $cond_type, $cond_values, $product_id ) {
+    if ( $cond_type === 'product' ) {
+        return in_array( (int) $product_id, array_map( 'intval', (array) $cond_values ), true );
+    } elseif ( $cond_type === 'category' ) {
+        return twshop_has_term_cached( $cond_values, 'product_cat', $product_id );
+    } elseif ( $cond_type === 'tag' ) {
+        return twshop_has_term_cached( $cond_values, 'product_tag', $product_id );
+    }
+    return false;
+}
+
+/**
+ * twshop 自己加進購物車的特殊項目（贈品、買N送N 免費項目、點數兌換商品、加購項目）。
+ * 這些項目不算「顧客購買的商品」，不能拿來滿足規則條件（否則贈品可以自己撐住自己的條件）。
+ */
+function twshop_is_twshop_special_cart_item( $cart_item ) {
+    return isset( $cart_item['twshop_gift_rule_id'] )
+        || isset( $cart_item['twshop_bxgy_rule_id'] )
+        || isset( $cart_item['twshop_points_redeem_product_id'] )
+        || isset( $cart_item['twshop_addon_rule_id'] );
+}
+
+function twshop_cart_condition_fingerprint() {
+    if ( ! function_exists( 'WC' ) || ! WC()->cart ) return 'nocart';
+    $ids = array();
+    foreach ( WC()->cart->get_cart() as $cart_item ) {
+        if ( twshop_is_twshop_special_cart_item( $cart_item ) ) continue;
+        $ids[] = (int) $cart_item['product_id'];
+    }
+    sort( $ids );
+    return md5( implode( ',', array_unique( $ids ) ) );
+}
+
 function twshop_is_discount_rule_valid_compute( $rule, $user_roles, $cart_total = 0, $product_id = 0 ) {
     // 唯一判斷入口：所有型別的計算函式都經過這支函式判斷有效性，缺欄位（舊規則）一律視為啟用。
     if ( ( $rule['enabled'] ?? 'yes' ) === 'no' ) return false;
@@ -115,21 +155,27 @@ function twshop_is_discount_rule_valid_compute( $rule, $user_roles, $cart_total 
     $logic = $rule['logic'] ?? 'and';
     $has_min = !empty($rule['min_amount']) && $rule['min_amount'] > 0;
 
-    // 限制條件：condition_type (product/category/tag) + condition_values (可複選)
+    // 限制條件：condition_type (product/category/tag) + condition_values (可複選)。
+    // 商品層（$product_id > 0）比對該商品；購物車層（$product_id = 0：免運/贈品/加購/整單折扣）
+    // 改為「購物車內任一件一般商品符合即成立」——修正前購物車層一律略過條件，等於全站適用（v25.8.34）。
     list( $cond_type, $cond_values ) = twshop_get_rule_condition( $rule );
-    $has_cond = ! empty( $cond_type ) && ! empty( $cond_values ) && $product_id > 0;
+    $has_cond = ! empty( $cond_type ) && ! empty( $cond_values );
 
     if ( !$has_min && !$has_cond ) return true;
 
     $p_min = $has_min ? ($cart_total >= floatval($rule['min_amount'])) : false;
     $p_cond = false;
     if ( $has_cond ) {
-        if ( $cond_type === 'product' ) {
-            $p_cond = in_array( $product_id, array_map( 'intval', (array) $cond_values ), true );
-        } elseif ( $cond_type === 'category' ) {
-            $p_cond = twshop_has_term_cached( $cond_values, 'product_cat', $product_id );
-        } elseif ( $cond_type === 'tag' ) {
-            $p_cond = twshop_has_term_cached( $cond_values, 'product_tag', $product_id );
+        if ( $product_id > 0 ) {
+            $p_cond = twshop_rule_condition_matches_product( $cond_type, $cond_values, $product_id );
+        } elseif ( function_exists( 'WC' ) && WC()->cart ) {
+            foreach ( WC()->cart->get_cart() as $cart_item ) {
+                if ( twshop_is_twshop_special_cart_item( $cart_item ) ) continue;
+                if ( twshop_rule_condition_matches_product( $cond_type, $cond_values, (int) $cart_item['product_id'] ) ) {
+                    $p_cond = true;
+                    break;
+                }
+            }
         }
     }
 
