@@ -262,14 +262,13 @@ input:checked + .twshop-slider:before { transform:translateX(20px); }
 .twshop-switch-text{ min-width:2em; }
 /* 規則名稱輸入欄在卡片標題列（v25.8.42） */
 .twshop-rule-name-input{ flex:1 1 200px; min-width:160px; max-width:420px; font-weight:600; }
-/* 規則卡片標題列兩行排列（v25.8.44）：第一行名稱，第二行立即生效的時間與切換鈕 */
-.twshop-rule-card .twshop-card-header{ padding:12px 15px; background:#f7f7f7; cursor:pointer; border-bottom:1px solid #eee; display:flex; flex-direction:column; gap:10px; }
-.twshop-card-header-row{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+/* 規則卡片標題列單行排列（v25.8.45）：名稱欄固定寬度，其餘為立即生效的時間與切換鈕，窄螢幕自動換行 */
+.twshop-rule-card .twshop-card-header{ padding:10px 15px; background:#f7f7f7; cursor:pointer; border-bottom:1px solid #eee; display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; }
 .twshop-rule-card .twshop-card-header .drag-handle{ cursor:move; color:#999; display:inline-flex; }
 .twshop-rule-card .twshop-card-header .twshop-card-toggle-icon{ margin-left:auto; display:inline-flex; }
-.twshop-card-header-controls{ justify-content:space-between; padding-left:52px; font-size:12px; }
-.twshop-rule-schedule{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; }
-.twshop-rule-schedule label{ font-weight:normal; display:inline-flex; align-items:center; gap:4px; }
-.twshop-rule-schedule input{ width:140px; }
-.twshop-card-header-switches{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; }
-@media (max-width: 782px){ .twshop-card-header-controls{ padding-left:0; } }
+.twshop-rule-card .twshop-rule-name-input{ flex:0 1 200px; width:200px; min-width:120px; max-width:none; }
+.twshop-card-header-controls{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; font-size:12px; }
+.twshop-rule-schedule{ display:flex; flex-wrap:nowrap; align-items:center; gap:6px 10px; }
+.twshop-rule-schedule label{ font-weight:normal; display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+.twshop-rule-schedule input{ width:125px; }
+#twshop-rule-toolbar-status{ margin:0; }

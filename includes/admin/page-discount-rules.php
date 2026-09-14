@@ -49,17 +49,9 @@ function twshop_marketing_rules_tab() {
 
         <?php echo twshop_render_rule_overlap_warnings( $rules ); ?>
 
-        <div class="twshop-panel twshop-rule-toolbar" style="margin-bottom:15px;">
-            <div class="twshop-panel-body" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:15px;">
-                <label style="font-weight:normal; font-size:13px;"><input type="checkbox" id="twshop-rule-select-all" /> 全選</label>
-                <button type="button" class="button" id="twshop-batch-enable">批次啟用</button>
-                <button type="button" class="button" id="twshop-batch-disable">批次停用</button>
-                <button type="button" class="button" id="twshop-batch-delete" style="color:#b32d2e; border-color:#b32d2e;">批次刪除</button>
-                <span class="twshop-rule-status" id="twshop-rule-toolbar-status" aria-live="polite" style="flex-basis:100%;"></span>
-            </div>
-        </div>
+        <p class="twshop-rule-status" id="twshop-rule-toolbar-status" aria-live="polite"></p>
 
-        <div id="discount-repeater-container" style="margin-top:20px;">
+        <div id="discount-repeater-container" style="margin-top:10px;">
             <?php foreach ( $rules as $rule ) echo twshop_get_rule_row_html( $rule, $tiers, $product_cats, $product_tags ); ?>
         </div>
 
@@ -120,33 +112,28 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
         <?php wp_nonce_field( 'twshop_admin_action', 'twshop_nonce' ); ?>
 
         <div class="twshop-card-header">
-            <div class="twshop-card-header-row">
-                <input type="checkbox" class="twshop-rule-select" title="選取以進行批次操作" />
-                <span class="drag-handle" title="拖曳排序（越前面越先套用）"><?php echo twshop_get_account_tab_icon_svg( 'grip-vertical' ); ?></span>
-                <input type="text" name="name" class="twshop-rule-name-input" value="<?php echo esc_attr( $name ); ?>" placeholder="規則名稱（必填）" aria-label="規則名稱" required />
-                <span class="twshop-badge twshop-badge--warn twshop-rule-dirty-badge" style="display:none;">未儲存</span>
-                <span class="twshop-rule-status" aria-live="polite"></span>
-                <span class="twshop-card-toggle-icon" title="點擊收合或展開"><?php echo twshop_get_account_tab_icon_svg( 'chevron-down' ); ?></span>
-            </div>
-            <div class="twshop-card-header-row twshop-card-header-controls" title="這一列的設定切換或選好後立即生效">
+            <span class="drag-handle" title="拖曳排序（越前面越先套用）"><?php echo twshop_get_account_tab_icon_svg( 'grip-vertical' ); ?></span>
+            <input type="text" name="name" class="twshop-rule-name-input" value="<?php echo esc_attr( $name ); ?>" placeholder="規則名稱（必填）" aria-label="規則名稱" required />
+            <span class="twshop-badge twshop-badge--warn twshop-rule-dirty-badge" style="display:none;">未儲存</span>
+            <span class="twshop-card-header-controls" title="這些設定切換或選好後立即生效">
                 <span class="twshop-rule-schedule">
                     <label>開始 <input type="text" class="twshop-datetime-picker" name="start_time" value="<?php echo esc_attr( $s_time ); ?>" placeholder="立即" /></label>
                     <label>結束 <input type="text" class="twshop-datetime-picker" name="end_time" value="<?php echo esc_attr( $e_time ); ?>" placeholder="不限" /></label>
-                    <a href="#" class="twshop-clear-datetime">清除時間</a>
+                    <a href="#" class="twshop-clear-datetime" title="清除開始與結束時間">清除</a>
                 </span>
-                <span class="twshop-card-header-switches">
-                    <label class="twshop-switch rule-stack-wrap" title="開啟後，排序在這條規則後面的同類規則不會再套用">
-                        <input type="checkbox" class="twshop-rule-stack-toggle" name="stack_exclusive" value="yes" <?php checked( $stack_exclusive, 'yes' ); ?> />
-                        <span class="twshop-switch-slider" aria-hidden="true"></span>
-                        <span class="twshop-switch-text">不與其他同類自動折扣疊加</span>
-                    </label>
-                    <label class="twshop-switch">
-                        <input type="checkbox" class="twshop-rule-enabled-toggle" name="enabled" value="yes" <?php checked( $enabled, 'yes' ); ?> />
-                        <span class="twshop-switch-slider" aria-hidden="true"></span>
-                        <span class="twshop-switch-text"><?php echo $enabled === 'no' ? '停用' : '啟用'; ?></span>
-                    </label>
-                </span>
-            </div>
+                <label class="twshop-switch rule-stack-wrap" title="開啟後，排序在這條規則後面的同類規則不會再套用">
+                    <input type="checkbox" class="twshop-rule-stack-toggle" name="stack_exclusive" value="yes" <?php checked( $stack_exclusive, 'yes' ); ?> />
+                    <span class="twshop-switch-slider" aria-hidden="true"></span>
+                    <span class="twshop-switch-text">不與其他同類自動折扣疊加</span>
+                </label>
+                <label class="twshop-switch">
+                    <input type="checkbox" class="twshop-rule-enabled-toggle" name="enabled" value="yes" <?php checked( $enabled, 'yes' ); ?> />
+                    <span class="twshop-switch-slider" aria-hidden="true"></span>
+                    <span class="twshop-switch-text"><?php echo $enabled === 'no' ? '停用' : '啟用'; ?></span>
+                </label>
+            </span>
+            <span class="twshop-rule-status" aria-live="polite"></span>
+            <span class="twshop-card-toggle-icon" title="點擊收合或展開"><?php echo twshop_get_account_tab_icon_svg( 'chevron-down' ); ?></span>
         </div>
 
         <div class="twshop-card-body" style="padding:20px; display:none;">

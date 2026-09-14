@@ -1,5 +1,5 @@
 /**
- * 折扣與贈品管理頁：規則卡片的新增/複製/儲存/刪除/批次操作/拖曳排序（全部走 admin-ajax）。
+ * 折扣與贈品管理頁：規則卡片的新增/複製/儲存/刪除/拖曳排序（全部走 admin-ajax）。
  *
  * 自 page-discount-rules.php 的內嵌 <script> 抽出（2026-08-21）；v25.8.38 改為就地顯示狀態文字
  * （不再跳 alert）、未儲存提示、複製規則、依型別顯示數值單位與即時說明。
@@ -36,7 +36,7 @@ jQuery(document).ready(function($) {
         $card.find('.twshop-rule-dirty-badge').toggle(dirty);
     }
     $container.on('input change', '.twshop-rule-form :input', function() {
-        if (!dirtyTrackingOn || $(this).hasClass('twshop-rule-select')) return;
+        if (!dirtyTrackingOn) return;
         // 已儲存規則的標題列切換鈕會立刻存檔，不算未儲存的修改
         if ($(this).closest('.twshop-card-header-controls').length && $(this).closest('.twshop-rule-form').find('input[name="rule_id"]').val()) return;
         setDirty($(this).closest('.twshop-rule-form'), true);
@@ -327,56 +327,6 @@ jQuery(document).ready(function($) {
     $container.on('click', '.twshop-remove-tier-row', function() {
         $(this).closest('.twshop-tier-row').remove();
     });
-
-    // ── 批次操作 ─────────────────────────────────────────────
-    $('#twshop-rule-select-all').on('change', function() {
-        $container.children('.twshop-rule-form').find('.twshop-rule-select').prop('checked', $(this).is(':checked'));
-    });
-
-    function getSelectedRuleIds() {
-        var ids = [];
-        $container.children('.twshop-rule-form').each(function() {
-            if ($(this).find('.twshop-rule-select').is(':checked')) {
-                var id = $(this).find('input[name="rule_id"]').val();
-                if (id) ids.push(id);
-            }
-        });
-        return ids;
-    }
-
-    function findCardById(id) {
-        return $container.children('.twshop-rule-form').filter(function() {
-            return $(this).find('input[name="rule_id"]').val() === id;
-        });
-    }
-
-    function runBatchAction(actionType, confirmMsg) {
-        var ids = getSelectedRuleIds();
-        if (!ids.length) { showToolbarStatus('error', '請先勾選要操作的規則（未儲存的新規則不能批次操作）'); return; }
-        if (confirmMsg && !confirm(confirmMsg.replace('{n}', ids.length))) return;
-        $.post(twshopDiscountRules.ajaxUrl, { action: 'twshop_batch_update_rules', action_type: actionType, rule_ids: ids, twshop_nonce: twshopAdminNonce })
-            .done(function(res) {
-                if (!res || !res.success) { showToolbarStatus('error', ajaxErrorMsg(res, '批次操作失敗')); return; }
-                var wasTracking = dirtyTrackingOn;
-                dirtyTrackingOn = false;
-                ids.forEach(function(id) {
-                    var $card = findCardById(id);
-                    if (actionType === 'delete') {
-                        $card.remove();
-                    } else {
-                        $card.find('.twshop-rule-enabled-toggle').prop('checked', actionType === 'enable').trigger('change');
-                        $card.find('.twshop-rule-select').prop('checked', false);
-                    }
-                });
-                dirtyTrackingOn = wasTracking;
-                var label = { enable: '啟用', disable: '停用', delete: '刪除' }[actionType];
-                showToolbarStatus('success', '✓ 已' + label + ' ' + ids.length + ' 筆規則');
-            })
-            .fail(function() { showToolbarStatus('error', '批次操作失敗，請檢查網路連線後重試'); });
-    }
-    $('#twshop-batch-enable').on('click', function(){ runBatchAction('enable', null); });
-    $('#twshop-batch-disable').on('click', function(){ runBatchAction('disable', null); });
-    $('#twshop-batch-delete').on('click', function(){ runBatchAction('delete', '確定要刪除選取的 {n} 筆規則嗎？此操作無法復原。'); });
 
     // ── 清除時間 ─────────────────────────────────────────────
     $container.on('click', '.twshop-clear-datetime', function(e) {
