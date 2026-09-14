@@ -37,8 +37,8 @@ jQuery(document).ready(function($) {
     }
     $container.on('input change', '.twshop-rule-form :input', function() {
         if (!dirtyTrackingOn || $(this).hasClass('twshop-rule-select')) return;
-        // 已儲存規則的啟用開關會立刻存檔，不算未儲存的修改
-        if ($(this).hasClass('twshop-rule-enabled-toggle') && $(this).closest('.twshop-rule-form').find('input[name="rule_id"]').val()) return;
+        // 已儲存規則的標題列切換鈕會立刻存檔，不算未儲存的修改
+        if (($(this).hasClass('twshop-rule-enabled-toggle') || $(this).hasClass('twshop-rule-stack-toggle')) && $(this).closest('.twshop-rule-form').find('input[name="rule_id"]').val()) return;
         setDirty($(this).closest('.twshop-rule-form'), true);
     });
     $container.on('click', '.twshop-chip-remove, .twshop-add-tier-row, .twshop-remove-tier-row, .twshop-clear-datetime', function() {
@@ -166,34 +166,36 @@ jQuery(document).ready(function($) {
         $card.attr('data-rule-enabled', isEnabled ? 'yes' : 'no');
     }
 
-    // 已儲存的規則：切換啟用開關就立刻存（只改啟用狀態，不會連帶送出卡片裡其他未儲存的修改）；
-    // 還沒存過的新規則沒有 rule_id，維持跟著「儲存」一起送出。
-    $container.on('change', '.twshop-rule-enabled-toggle', function() {
-        var $toggle = $(this);
+    // 標題列的切換鈕（啟用、不疊加）：已儲存的規則切換後立刻存檔（只改這一個欄位，不會連帶送出
+    // 卡片裡其他未儲存的修改）；還沒存過的新規則沒有 rule_id，維持跟著「儲存規則」一起送出。
+    function saveHeaderToggle($toggle, onType, offType, onMsg, offMsg, applyLook) {
         var $card = $toggle.closest('.twshop-rule-card');
-        var isEnabled = $toggle.is(':checked');
-        applyEnabledLook($card, isEnabled);
+        var isOn = $toggle.is(':checked');
+        if (applyLook) applyLook($card, isOn);
 
         var ruleId = $card.find('input[name="rule_id"]').val();
         if (!ruleId || !dirtyTrackingOn) return;
 
+        var revert = function(msg) {
+            $toggle.prop('checked', !isOn);
+            if (applyLook) applyLook($card, !isOn);
+            showCardStatus($card, 'error', msg);
+        };
         $toggle.prop('disabled', true);
-        $.post(twshopDiscountRules.ajaxUrl, { action: 'twshop_batch_update_rules', action_type: isEnabled ? 'enable' : 'disable', rule_ids: [ruleId], twshop_nonce: twshopAdminNonce })
+        $.post(twshopDiscountRules.ajaxUrl, { action: 'twshop_batch_update_rules', action_type: isOn ? onType : offType, rule_ids: [ruleId], twshop_nonce: twshopAdminNonce })
             .done(function(res) {
-                if (res && res.success) {
-                    showCardStatus($card, 'success', '✓ 已' + (isEnabled ? '啟用' : '停用'));
-                } else {
-                    $toggle.prop('checked', !isEnabled);
-                    applyEnabledLook($card, !isEnabled);
-                    showCardStatus($card, 'error', ajaxErrorMsg(res, '切換失敗，請重新整理頁面後再試'));
-                }
+                if (res && res.success) showCardStatus($card, 'success', isOn ? onMsg : offMsg);
+                else revert(ajaxErrorMsg(res, '切換失敗，請重新整理頁面後再試'));
             })
-            .fail(function() {
-                $toggle.prop('checked', !isEnabled);
-                applyEnabledLook($card, !isEnabled);
-                showCardStatus($card, 'error', '切換失敗，請檢查網路連線後重試');
-            })
+            .fail(function() { revert('切換失敗，請檢查網路連線後重試'); })
             .always(function() { $toggle.prop('disabled', false); });
+    }
+
+    $container.on('change', '.twshop-rule-enabled-toggle', function() {
+        saveHeaderToggle($(this), 'enable', 'disable', '✓ 已啟用', '✓ 已停用', applyEnabledLook);
+    });
+    $container.on('change', '.twshop-rule-stack-toggle', function() {
+        saveHeaderToggle($(this), 'stack_on', 'stack_off', '✓ 已設為不疊加', '✓ 已取消不疊加', null);
     });
 
     function openAndScrollTo($card, focusSelector) {

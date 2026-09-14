@@ -148,6 +148,11 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
             </span>
             <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
                 <span class="twshop-rule-status" aria-live="polite"></span>
+                <label class="twshop-switch rule-stack-wrap" title="開啟後，排序在這條規則後面的同類規則不會再套用（切換後立即生效）">
+                    <input type="checkbox" class="twshop-rule-stack-toggle" name="stack_exclusive" value="yes" <?php checked( $stack_exclusive, 'yes' ); ?> />
+                    <span class="twshop-switch-slider" aria-hidden="true"></span>
+                    <span class="twshop-switch-text">不與其他同類自動折扣疊加</span>
+                </label>
                 <label class="twshop-switch" title="切換後立即生效">
                     <input type="checkbox" class="twshop-rule-enabled-toggle" name="enabled" value="yes" <?php checked( $enabled, 'yes' ); ?> />
                     <span class="twshop-switch-slider" aria-hidden="true"></span>
@@ -225,10 +230,6 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                 </div>
             </div>
 
-            <div class="rule-stack-wrap" style="background:#fdf6e8; padding:10px 15px; border-radius:4px; margin-bottom:20px; border: 1px solid #f0dfa8;">
-                <label style="font-weight:normal;"><input type="checkbox" name="stack_exclusive" value="yes" <?php checked( $stack_exclusive, 'yes' ); ?> /> <strong>不與其他同類自動折扣疊加</strong></label>
-                <p class="twshop-rule-hint" style="margin:4px 0 0 24px;">勾選後，排序在這條規則後面的同類規則不會再套用（優先順序看卡片上的編號）。</p>
-            </div>
 
             <div class="rule-scope-section">
                 <h4 class="twshop-rule-section-title">2. 適用範圍與門檻</h4>
@@ -508,15 +509,16 @@ function twshop_ajax_delete_rule() {
 }
 
 /**
- * 批次啟用/停用/刪除多筆規則。刪除時比照 twshop_ajax_delete_rule()，一併清理該規則的
- * 使用次數 option／user meta，避免又留下孤兒資料（兩處刪除邏輯刻意保持一致）。
+ * 批次啟用/停用/刪除多筆規則，以及卡片標題列「不疊加」切換鈕的立即存檔（stack_on/stack_off）。
+ * 刪除時比照 twshop_ajax_delete_rule()，一併清理該規則的使用次數 option／user meta，
+ * 避免又留下孤兒資料（兩處刪除邏輯刻意保持一致）。
  */
 function twshop_ajax_batch_update_rules() {
     if ( ! current_user_can('manage_woocommerce') ) wp_send_json_error();
     check_ajax_referer( 'twshop_admin_action', 'twshop_nonce' );
 
     $action_type = sanitize_text_field( wp_unslash( $_POST['action_type'] ?? '' ) );
-    if ( ! in_array( $action_type, array( 'enable', 'disable', 'delete' ), true ) ) {
+    if ( ! in_array( $action_type, array( 'enable', 'disable', 'delete', 'stack_on', 'stack_off' ), true ) ) {
         wp_send_json_error( array( 'msg' => '不明的批次操作。' ) );
     }
     $rule_ids = array_map( 'sanitize_text_field', wp_unslash( (array) ( $_POST['rule_ids'] ?? array() ) ) );
@@ -534,10 +536,12 @@ function twshop_ajax_batch_update_rules() {
         }
         update_option( 'wc_discount_rules_settings', array_values( $rules ) );
     } else {
-        $new_enabled = ( 'enable' === $action_type ) ? 'yes' : 'no';
+        $is_stack = in_array( $action_type, array( 'stack_on', 'stack_off' ), true );
+        $field    = $is_stack ? 'stack_exclusive' : 'enabled';
+        $value    = in_array( $action_type, array( 'enable', 'stack_on' ), true ) ? 'yes' : 'no';
         foreach ( $rules as $k => $r ) {
             if ( in_array( $r['rule_id'], $rule_ids, true ) ) {
-                $rules[ $k ]['enabled'] = $new_enabled;
+                $rules[ $k ][ $field ] = $value;
             }
         }
         update_option( 'wc_discount_rules_settings', $rules );
