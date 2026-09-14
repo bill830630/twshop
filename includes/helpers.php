@@ -77,8 +77,7 @@ function twshop_delete_rule_usage_total( $rule_id ) {
  *
  * 舊版規則只有單一的 `category` / `tag` 欄位，尚未重新儲存過的規則沒有
  * `condition_type`/`condition_values`，必須從舊欄位回退讀取。這段回退原本在三個地方
- * 各抄了一份（twshop_is_discount_rule_valid()、twshop_build_rule_coupon_restrictions()、
- * twshop_auto_display_coupons() 的規則優惠券迴圈），三份逐字相同；漏改一份的後果是
+ * 各抄了一份，三份逐字相同；漏改一份的後果是
  * 「舊規則在某一條路徑上限制條件突然消失」——規則會變成無條件適用，不會有任何錯誤訊息。
  *
  * 回傳 array( $type, $values )，供 list() 解構。
@@ -89,6 +88,48 @@ function twshop_get_rule_condition( $rule ) {
     if ( empty( $type ) && ! empty( $rule['category'] ) ) return array( 'category', array( $rule['category'] ) );
     if ( empty( $type ) && ! empty( $rule['tag'] ) )      return array( 'tag', array( $rule['tag'] ) );
     return array( $type, $values );
+}
+
+/**
+ * 「規則作為優惠卡券供會員點擊套用」功能已於 v25.8.50 移除。舊資料一次性遷移：原本設成卡券的規則
+ * 改為停用（否則會突然對所有符合條件的顧客自動套用），並清掉所有規則上的卡券欄位。管理員若要沿用
+ * 這些規則，自行在後台啟用即可（變成自動套用）。
+ *
+ * 掛在 admin_init、以 twshop_rule_coupons_migrated 旗標只跑一次，**不要放進 twshop_get_rules()**：
+ * 讀取時順手寫回，會把測試用 pre_option_wc_discount_rules_settings 注入的假規則寫進正式資料庫
+ * （開發時實際發生過，蓋掉了站台的真實規則）。遷移前規則引擎本身就會忽略 is_coupon=yes 的規則
+ * （twshop_is_discount_rule_valid_compute()），前台不會誤套用。
+ */
+function twshop_maybe_migrate_removed_rule_coupons() {
+    if ( 'yes' === get_option( 'twshop_rule_coupons_migrated' ) ) return;
+    $rules = twshop_migrate_removed_rule_coupons( get_option( 'wc_discount_rules_settings', array() ) );
+    if ( null !== $rules ) {
+        update_option( 'wc_discount_rules_settings', $rules );
+        twshop_get_rules( true );
+    }
+    update_option( 'twshop_rule_coupons_migrated', 'yes' );
+}
+
+/**
+ * @return array|null 有需要寫回時回傳遷移後的規則陣列，不需要變更時回傳 null
+ */
+function twshop_migrate_removed_rule_coupons( $rules ) {
+    if ( ! is_array( $rules ) || empty( $rules ) ) return null;
+    $coupon_keys = array( 'is_coupon', 'c_code', 'c_title', 'c_desc', 'c_exclusive' );
+    $changed = false;
+    foreach ( $rules as $k => $r ) {
+        if ( ! is_array( $r ) ) continue;
+        if ( 'yes' === ( $r['is_coupon'] ?? 'no' ) ) {
+            $rules[ $k ]['enabled'] = 'no';
+        }
+        foreach ( $coupon_keys as $key ) {
+            if ( array_key_exists( $key, $r ) ) {
+                unset( $rules[ $k ][ $key ] );
+                $changed = true;
+            }
+        }
+    }
+    return $changed ? $rules : null;
 }
 
 /**
@@ -191,7 +232,6 @@ function twshop_get_option_defaults() {
         'wc_coupon_dialog_heading'              => '可用優惠券',
         'wc_coupon_dialog_trigger_applied_text' => '已套用優惠券・點此查看或更換',
         'wc_coupon_dialog_trigger_none_text'    => '查看可用優惠券（{count}）',
-        'wc_coupon_exclusive_error_text'        => '此為單獨使用之專屬優惠，不可與其他{noun}並用',
         'wc_general_coupon_noun'                => '優惠券',
         'wc_general_coupon_page_desc'           => '這裡展示您擁有的所有優惠，點擊按鈕即可前往購物選購',
         'wc_general_coupon_page_title'          => '專屬優惠券',

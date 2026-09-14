@@ -77,8 +77,6 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
     $min = $r['min_amount'] ?? '';
     $limit = $r['usage_limit'] ?? ''; $u_limit = $r['user_limit'] ?? '';
     $s_time = $r['start_time'] ?? ''; $e_time = $r['end_time'] ?? '';
-    $is_c = $r['is_coupon'] ?? 'no'; $c_code = $r['c_code'] ?? ''; $c_title = $r['c_title'] ?? '';
-    $c_desc = $r['c_desc'] ?? ''; $c_exclusive = $r['c_exclusive'] ?? 'no';
     $enabled = $r['enabled'] ?? 'yes'; $stack_exclusive = $r['stack_exclusive'] ?? 'no';
     $buy_qty = $r['buy_qty'] ?? ''; $free_qty = $r['free_qty'] ?? '';
     // 注意：命名為 $rule_tiers 以跟本函式第二參數 $tiers（會員等級清單，供「套用對象」下拉使用）區分開來。
@@ -101,9 +99,6 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
     foreach ( $cats as $term ) { $cat_options[ $term->slug ] = $term->name; }
     $tag_options = array();
     foreach ( $tags as $term ) { $tag_options[ $term->slug ] = $term->name; }
-
-    $label_style = 'font-weight:bold; display:block; margin-bottom:5px;';
-    $sub_label   = 'font-size:13px; display:block; margin-bottom:4px;';
 
     ob_start();
     ?>
@@ -134,142 +129,136 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
             <span class="twshop-card-toggle-icon" title="點擊收合或展開"><?php echo twshop_get_account_tab_icon_svg( 'chevron-down' ); ?></span>
         </div>
 
-        <div class="twshop-card-body" style="padding:20px; display:none;">
+        <div class="twshop-card-body" style="display:none;">
 
-            <h4 class="twshop-rule-section-title">1. 規則類型與折扣</h4>
-            <div style="display:flex; flex-wrap:wrap; gap:15px; margin-bottom:15px;">
-                <div style="flex:1.5; min-width:220px;">
-                    <label style="<?php echo $label_style; ?>">折扣與贈品類型</label>
-                    <select name="type" class="twshop-rule-type" style="width:100%;">
-                        <option value="percent" <?php selected($type, 'percent'); ?>>商品單價打折 (%)</option>
-                        <option value="fixed_product" <?php selected($type, 'fixed_product'); ?>>商品單價折抵 ($)</option>
-                        <option value="cart_percent" <?php selected($type, 'cart_percent'); ?>>整筆訂單打折 (%)</option>
-                        <option value="cart_discount" <?php selected($type, 'cart_discount'); ?>>整筆訂單折抵 ($)</option>
-                        <option value="free_shipping" <?php selected($type, 'free_shipping'); ?>>整單免運費</option>
-                        <option value="free_gift" <?php selected($type, 'free_gift'); ?>>滿額/條件贈品 (自動加入購物車)</option>
-                        <option value="addon_product" <?php selected($type, 'addon_product'); ?>>加購商品 (符合條件以特價購買)</option>
-                        <option value="buy_x_get_y" <?php selected($type, 'buy_x_get_y'); ?>>買N送N (指定範圍內最便宜M件免費)</option>
-                        <option value="tiered_cart" <?php selected($type, 'tiered_cart'); ?>>階梯式訂單折扣 (多門檻)</option>
-                    </select>
-                </div>
-                <div style="flex:1; min-width:150px;"><label style="<?php echo $label_style; ?>">套用對象</label><select name="role" style="width:100%;"><option value="all" <?php selected($role, 'all'); ?>>所有顧客</option><?php foreach($tiers as $tier): ?><option value="<?php echo esc_attr($tier['slug']); ?>" <?php selected($role, $tier['slug']); ?>><?php echo esc_html($tier['name']); ?></option><?php endforeach; ?></select></div>
-            </div>
-
-            <div style="display:flex; flex-wrap:wrap; gap:15px; margin-bottom:15px;">
-                <div class="rule-value-wrap" style="flex:1; min-width:180px; max-width:320px;">
-                    <label class="rule-value-label" style="<?php echo $label_style; ?>">折扣數值</label>
-                    <input type="number" step="1" name="value" class="twshop-rule-value" value="<?php echo esc_attr( $val ); ?>" style="width:100%;" />
-                    <p class="twshop-rule-value-hint"></p>
-                </div>
-                <div class="rule-gift-wrap" style="flex:1; min-width:220px; display:none;">
-                    <label style="<?php echo $label_style; ?>">指定商品 (贈品/加購品)</label>
-                    <?php // 排除可變商品：free_gift 型別是直接 WC()->cart->add_to_cart( $id, 1, 0, ... )
-                    // （不含 variation_id）自動加入購物車，選到可變商品的父商品會讓贈品必定加不進去
-                    // （核心要求可變商品一定要指定規格），且這段是掛在 woocommerce_before_calculate_totals，
-                    // 失敗時完全沒有任何錯誤訊息浮現，管理員很難發現。addon_product 型別雖然不是主動
-                    // 加入購物車，但同一個欄位語意是「指定商品」，一併排除避免混淆。
-                    echo twshop_render_product_search_field( 'gift_product_id', $gift_id ? array( $gift_id ) : array(), false, '— 請選擇商品 —', array( 'variable' ) ); ?>
-                </div>
-                <div class="rule-bxgy-wrap" style="flex:1; min-width:220px; display:none;">
-                    <label style="<?php echo $label_style; ?>">買N送N 數量設定</label>
-                    <div style="display:flex; flex-wrap:wrap; gap:10px;">
-                        <span style="flex:1; min-width:100px;"><label style="font-size:12px; display:block;">買滿件數 (N)</label><input type="number" step="1" min="1" name="buy_qty" value="<?php echo esc_attr( $buy_qty ); ?>" style="width:100%;" /></span>
-                        <span style="flex:1; min-width:150px;"><label style="font-size:12px; display:block;">送出件數 (M，須小於 N)</label><input type="number" step="1" min="1" name="free_qty" value="<?php echo esc_attr( $free_qty ); ?>" style="width:100%;" /></span>
+            <section class="twshop-rule-section">
+                <h4 class="twshop-rule-section-title">1. 規則類型與折扣</h4>
+                <div class="twshop-rule-grid">
+                    <div class="twshop-rule-field">
+                        <label class="twshop-rule-label">折扣與贈品類型</label>
+                        <select name="type" class="twshop-rule-type">
+                            <option value="percent" <?php selected($type, 'percent'); ?>>商品單價打折 (%)</option>
+                            <option value="fixed_product" <?php selected($type, 'fixed_product'); ?>>商品單價折抵 ($)</option>
+                            <option value="cart_percent" <?php selected($type, 'cart_percent'); ?>>整筆訂單打折 (%)</option>
+                            <option value="cart_discount" <?php selected($type, 'cart_discount'); ?>>整筆訂單折抵 ($)</option>
+                            <option value="free_shipping" <?php selected($type, 'free_shipping'); ?>>整單免運費</option>
+                            <option value="free_gift" <?php selected($type, 'free_gift'); ?>>滿額/條件贈品 (自動加入購物車)</option>
+                            <option value="addon_product" <?php selected($type, 'addon_product'); ?>>加購商品 (符合條件以特價購買)</option>
+                            <option value="buy_x_get_y" <?php selected($type, 'buy_x_get_y'); ?>>買N送N (指定範圍內最便宜M件免費)</option>
+                            <option value="tiered_cart" <?php selected($type, 'tiered_cart'); ?>>階梯式訂單折扣 (多門檻)</option>
+                        </select>
                     </div>
-                    <p class="description" style="margin:4px 0 0;">數量以「適用範圍」選的商品/分類/標籤為準（此型別必填），每筆訂單最多套用一次。</p>
+                    <div class="twshop-rule-field">
+                        <label class="twshop-rule-label">套用對象</label>
+                        <select name="role"><option value="all" <?php selected($role, 'all'); ?>>所有顧客</option><?php foreach($tiers as $tier): ?><option value="<?php echo esc_attr($tier['slug']); ?>" <?php selected($role, $tier['slug']); ?>><?php echo esc_html($tier['name']); ?></option><?php endforeach; ?></select>
+                    </div>
+                    <div class="twshop-rule-field rule-value-wrap">
+                        <label class="twshop-rule-label rule-value-label">折扣數值</label>
+                        <input type="number" step="any" name="value" class="twshop-rule-value" value="<?php echo esc_attr( $val ); ?>" />
+                        <span class="twshop-rule-value-hint"></span>
+                    </div>
+                    <div class="twshop-rule-field rule-gift-wrap" style="display:none;">
+                        <label class="twshop-rule-label">指定商品 <small>(贈品/加購品)</small></label>
+                        <?php // 排除可變商品：free_gift 型別是直接 WC()->cart->add_to_cart( $id, 1, 0, ... )
+                        // （不含 variation_id）自動加入購物車，選到可變商品的父商品會讓贈品必定加不進去
+                        // （核心要求可變商品一定要指定規格），且這段是掛在 woocommerce_before_calculate_totals，
+                        // 失敗時完全沒有任何錯誤訊息浮現，管理員很難發現。addon_product 型別雖然不是主動
+                        // 加入購物車，但同一個欄位語意是「指定商品」，一併排除避免混淆。
+                        echo twshop_render_product_search_field( 'gift_product_id', $gift_id ? array( $gift_id ) : array(), false, '— 請選擇商品 —', array( 'variable' ) ); ?>
+                    </div>
+                    <div class="twshop-rule-field rule-bxgy-wrap" style="display:none;">
+                        <label class="twshop-rule-label">買滿件數 (N)</label>
+                        <input type="number" step="1" name="buy_qty" value="<?php echo esc_attr( $buy_qty ); ?>" />
+                    </div>
+                    <div class="twshop-rule-field rule-bxgy-wrap" style="display:none;">
+                        <label class="twshop-rule-label">送出件數 (M) <small>須小於 N</small></label>
+                        <input type="number" step="1" name="free_qty" value="<?php echo esc_attr( $free_qty ); ?>" />
+                    </div>
+                    <p class="twshop-rule-hint is-full rule-bxgy-wrap" style="display:none;">數量以「適用範圍」選的商品/分類/標籤為準（此類型必填），每筆訂單最多套用一次。</p>
+
+                    <div class="twshop-rule-field is-full rule-tiers-wrap" style="display:none;">
+                        <label class="twshop-rule-label">門檻階梯 <small>消費滿多少 → 打折/折抵多少，套用符合的最高門檻</small></label>
+                        <div class="twshop-tiers-rows">
+                            <?php foreach ( $rule_tiers as $tier ) echo twshop_get_rule_tier_row_html( $tier ); ?>
+                        </div>
+                        <button type="button" class="button twshop-add-tier-row">新增階梯</button>
+                    </div>
+
+                    <div class="twshop-rule-field is-full rule-shipping-methods-wrap" style="display:none;">
+                        <label class="twshop-rule-label">適用運送方式 <small>都不勾 = 全部運送方式皆免運</small></label>
+                        <div class="twshop-rule-checklist">
+                            <?php if ( empty( $shipping_method_options ) ) : ?>
+                                <span class="twshop-rule-hint">尚未設定任何運送方式（請先至 WooCommerce → 設定 → 運送 建立運送區域與方式）</span>
+                            <?php else : foreach ( $shipping_method_options as $sm_key => $sm_label ) : ?>
+                                <label><input type="checkbox" name="shipping_methods[]" value="<?php echo esc_attr( $sm_key ); ?>" <?php checked( in_array( $sm_key, $shipping_methods, true ) ); ?> /> <?php echo esc_html( $sm_label ); ?></label>
+                            <?php endforeach; endif; ?>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="rule-tiers-wrap" style="margin-bottom:15px; display:none; background:#f9f9f9; padding:15px; border-radius:4px; border:1px solid #eee;">
-                <label style="font-weight:bold; display:block; margin-bottom:8px;">門檻階梯（消費滿多少 → 打折/折抵多少，套用符合的最高門檻）</label>
-                <div class="twshop-tiers-rows">
-                    <?php foreach ( $rule_tiers as $tier ) echo twshop_get_rule_tier_row_html( $tier ); ?>
-                </div>
-                <button type="button" class="button twshop-add-tier-row">新增階梯</button>
-            </div>
-
-            <div class="rule-shipping-methods-wrap" style="margin-bottom:15px; display:none;">
-                <label style="<?php echo $label_style; ?>">適用運送方式 <span style="font-weight:normal; color:#888;">（都不勾 = 全部運送方式皆免運）</span></label>
-                <div style="display:flex; flex-wrap:wrap; gap:8px 20px; padding:10px; background:#f9f9f9; border:1px solid #eee; border-radius:4px;">
-                    <?php if ( empty( $shipping_method_options ) ) : ?>
-                        <span style="color:#999; font-size:13px;">尚未設定任何運送方式（請先至 WooCommerce → 設定 → 運送 建立運送區域與方式）</span>
-                    <?php else : foreach ( $shipping_method_options as $sm_key => $sm_label ) : ?>
-                        <label style="font-weight:normal; font-size:13px;">
-                            <input type="checkbox" name="shipping_methods[]" value="<?php echo esc_attr( $sm_key ); ?>" <?php checked( in_array( $sm_key, $shipping_methods, true ) ); ?> />
-                            <?php echo esc_html( $sm_label ); ?>
-                        </label>
-                    <?php endforeach; endif; ?>
-                </div>
-            </div>
-
-
-            <div class="rule-scope-section">
+            <section class="twshop-rule-section rule-scope-section">
                 <h4 class="twshop-rule-section-title">2. 適用範圍與門檻</h4>
-                <div class="rule-condition-block" style="background:#f9f9f9; padding:15px; border-radius:4px; margin-bottom:20px; border: 1px solid #eee;">
-                    <p class="twshop-rule-hint rule-condition-hint" style="margin:0 0 10px;"></p>
-                    <div class="twshop-condition-scope" style="display:flex; flex-wrap:wrap; gap:15px;">
-                        <div style="flex:1; min-width:150px;">
-                            <label style="<?php echo $sub_label; ?>">適用範圍</label>
-                            <select name="condition_type" class="twshop-condition-type" style="width:100%;">
-                                <option value="">不限商品</option>
-                                <option value="product" <?php selected($cond_type, 'product'); ?>>指定商品</option>
-                                <option value="category" <?php selected($cond_type, 'category'); ?>>指定商品分類</option>
-                                <option value="tag" <?php selected($cond_type, 'tag'); ?>>指定商品標籤</option>
-                            </select>
-                        </div>
-                        <div class="condition-values-wrap condition-values-product" style="flex:2; min-width:220px; display:none;">
-                            <label style="<?php echo $sub_label; ?>">選擇商品 <span style="font-weight:normal; color:#888;">(可複選)</span></label>
-                            <?php echo twshop_render_product_search_field( 'condition_values_product', $cond_products, true, '搜尋商品名稱或商品編號…' ); ?>
-                        </div>
-                        <div class="condition-values-wrap condition-values-category" style="flex:2; min-width:220px; display:none;">
-                            <label style="<?php echo $sub_label; ?>">選擇商品分類 <span style="font-weight:normal; color:#888;">(可複選)</span></label>
-                            <?php echo twshop_render_chip_field( 'condition_values_category', $cond_cats, $cat_options ); ?>
-                        </div>
-                        <div class="condition-values-wrap condition-values-tag" style="flex:2; min-width:220px; display:none;">
-                            <label style="<?php echo $sub_label; ?>">選擇商品標籤 <span style="font-weight:normal; color:#888;">(可複選)</span></label>
-                            <?php echo twshop_render_chip_field( 'condition_values_tag', $cond_tags, $tag_options ); ?>
-                        </div>
-                        <div class="rule-min-amount-wrap" style="flex:1; min-width:150px;"><label style="<?php echo $sub_label; ?>">訂單小計滿 ($) <span style="font-weight:normal; color:#888;">(留空不限)</span></label><input type="number" step="1" min="0" name="min_amount" class="twshop-rule-min-amount" value="<?php echo esc_attr( $min ); ?>" style="width:100%;" /></div>
+                <div class="twshop-rule-grid twshop-condition-scope">
+                    <p class="twshop-rule-hint is-full rule-condition-hint"></p>
+                    <div class="twshop-rule-field">
+                        <label class="twshop-rule-label">適用範圍</label>
+                        <select name="condition_type" class="twshop-condition-type">
+                            <option value="">不限商品</option>
+                            <option value="product" <?php selected($cond_type, 'product'); ?>>指定商品</option>
+                            <option value="category" <?php selected($cond_type, 'category'); ?>>指定商品分類</option>
+                            <option value="tag" <?php selected($cond_type, 'tag'); ?>>指定商品標籤</option>
+                        </select>
                     </div>
-                    <div class="twshop-rule-logic-wrap" style="margin-top:12px; font-size:13px;">
-                        <span style="margin-right:10px;">範圍與滿額要：</span>
-                        <label style="font-weight:normal; margin-right:15px; white-space:nowrap;"><input type="radio" name="logic" value="and" <?php checked($logic, 'and'); ?>> 兩者都符合</label>
-                        <label style="font-weight:normal; white-space:nowrap;"><input type="radio" name="logic" value="or" <?php checked($logic, 'or'); ?>> 符合其中一個即可</label>
+                    <div class="twshop-rule-field is-wide condition-values-wrap condition-values-product" style="display:none;">
+                        <label class="twshop-rule-label">選擇商品 <small>可複選</small></label>
+                        <?php echo twshop_render_product_search_field( 'condition_values_product', $cond_products, true, '搜尋商品名稱或商品編號…' ); ?>
                     </div>
-                </div>
-            </div>
-
-            <h4 class="twshop-rule-section-title">3. 使用次數</h4>
-            <div style="display:flex; flex-wrap:wrap; gap:15px; background:#f9f9f9; padding:15px; border-radius:4px; margin-bottom:20px; border:1px solid #eee;">
-                <div style="flex:1; min-width:150px; max-width:320px;"><label style="<?php echo $sub_label; ?>">總共可使用次數 <span style="font-weight:normal; color:#888;">(留空不限)</span></label><input type="number" min="0" name="usage_limit" value="<?php echo esc_attr( $limit ); ?>" style="width:100%;" /></div>
-                <div style="flex:1; min-width:150px; max-width:320px;"><label style="<?php echo $sub_label; ?>">每位會員限用次數 <span style="font-weight:normal; color:#888;">(留空不限)</span></label><input type="number" min="0" name="user_limit" value="<?php echo esc_attr( $u_limit ); ?>" style="width:100%;" /></div>
-            </div>
-
-            <h4 class="twshop-rule-section-title">4. 顯示方式</h4>
-            <div style="background:#eaf5fa; padding:15px; border-radius:4px; margin-bottom:15px; border: 1px solid #b8e0f5;">
-                <label style="font-weight:normal;"><input type="checkbox" name="is_coupon" value="yes" class="twshop-coupon-toggle" <?php checked($is_c, 'yes'); ?>> 作為優惠卡券供會員點擊套用 <span style="color:#888;">(不勾 = 符合條件時自動套用)</span></label>
-                <div class="virtual-coupon-wrap" style="display:<?php echo $is_c==='yes'?'block':'none'; ?>; margin-top:15px; padding-top:15px; border-top:1px dashed #007cba;">
-                    <div style="margin-bottom:10px;"><label><input type="checkbox" name="c_exclusive" value="yes" <?php checked($c_exclusive, 'yes'); ?>> <strong>單獨使用</strong> (勾選後，此券不可與其他優惠券同時套用)</label></div>
-                    <?php
-                    $auto_c_title = ( $type && $val !== '' ) ? wp_strip_all_tags( twshop_format_rule_discount( $type, $val, $r ) ) : '';
-                    $auto_c_desc  = twshop_build_rule_coupon_restrictions( $r );
-                    ?>
-                    <div style="display:flex; flex-wrap:wrap; gap:15px;">
-                        <div style="flex:1; min-width:150px;"><label style="<?php echo $sub_label; ?>">領取用代碼 <span style="font-weight:normal; color:#888;">(英文、數字、- 或 _)</span></label><input type="text" name="c_code" value="<?php echo esc_attr( $c_code ); ?>" pattern="[A-Za-z0-9_\-]+" title="只能使用英文、數字、- 或 _" style="width:100%;" /></div>
-                        <div style="flex:1; min-width:150px;"><label style="<?php echo $sub_label; ?>">優惠券卡片標題 <span style="font-weight:normal; color:#888;">(留空自動產生)</span></label><input type="text" name="c_title" value="<?php echo esc_attr( $c_title ); ?>" placeholder="<?php echo esc_attr( $auto_c_title ?: '依折扣自動產生' ); ?>" style="width:100%;" /></div>
-                        <div style="flex:2; min-width:200px;"><label style="<?php echo $sub_label; ?>">卡片說明 <span style="font-weight:normal; color:#888;">(留空自動產生)</span></label><input type="text" name="c_desc" value="<?php echo esc_attr( $c_desc ); ?>" placeholder="<?php echo esc_attr( $auto_c_desc ?: '依限制條件自動產生' ); ?>" style="width:100%;" /></div>
+                    <div class="twshop-rule-field is-wide condition-values-wrap condition-values-category" style="display:none;">
+                        <label class="twshop-rule-label">選擇商品分類 <small>可複選</small></label>
+                        <?php echo twshop_render_chip_field( 'condition_values_category', $cond_cats, $cat_options ); ?>
+                    </div>
+                    <div class="twshop-rule-field is-wide condition-values-wrap condition-values-tag" style="display:none;">
+                        <label class="twshop-rule-label">選擇商品標籤 <small>可複選</small></label>
+                        <?php echo twshop_render_chip_field( 'condition_values_tag', $cond_tags, $tag_options ); ?>
+                    </div>
+                    <div class="twshop-rule-field is-row-start rule-min-amount-wrap">
+                        <label class="twshop-rule-label">訂單小計滿 ($) <small>留空不限</small></label>
+                        <input type="number" step="any" name="min_amount" class="twshop-rule-min-amount" value="<?php echo esc_attr( $min ); ?>" />
+                    </div>
+                    <div class="twshop-rule-field is-wide twshop-rule-logic-wrap">
+                        <label class="twshop-rule-label">範圍與滿額要</label>
+                        <div class="twshop-rule-checklist">
+                            <label><input type="radio" name="logic" value="and" <?php checked($logic, 'and'); ?>> 兩者都符合</label>
+                            <label><input type="radio" name="logic" value="or" <?php checked($logic, 'or'); ?>> 符合其中一個即可</label>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="twshop-rule-footer" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; padding-top:15px; border-top:1px solid #eee;">
-                <span style="display:flex; gap:10px; flex-wrap:wrap;">
+            <section class="twshop-rule-section">
+                <h4 class="twshop-rule-section-title">3. 使用次數</h4>
+                <div class="twshop-rule-grid">
+                    <div class="twshop-rule-field">
+                        <label class="twshop-rule-label">總共可使用次數 <small>留空不限</small></label>
+                        <input type="number" step="1" name="usage_limit" value="<?php echo esc_attr( $limit ); ?>" />
+                    </div>
+                    <div class="twshop-rule-field">
+                        <label class="twshop-rule-label">每位會員限用次數 <small>留空不限</small></label>
+                        <input type="number" step="1" name="user_limit" value="<?php echo esc_attr( $u_limit ); ?>" />
+                    </div>
+                </div>
+            </section>
+
+
+            <div class="twshop-rule-footer">
+                <span class="twshop-rule-footer-group">
                     <button type="button" class="button twshop-duplicate-rule" <?php disabled( '' === $r_id ); ?> title="<?php echo '' === $r_id ? '請先儲存規則' : '複製一份（預設停用）'; ?>">複製規則</button>
-                    <button type="button" class="button remove-rule-row" style="color:#b32d2e; border-color:#b32d2e;">刪除規則</button>
+                    <button type="button" class="button remove-rule-row twshop-button-danger">刪除規則</button>
                 </span>
-                <span style="display:flex; gap:10px 14px; align-items:center; flex-wrap:wrap;">
+                <span class="twshop-rule-footer-group">
                     <span class="twshop-rule-status twshop-rule-footer-status" aria-live="polite"></span>
-                    <label class="rule-stack-wrap" style="font-weight:normal;" title="勾選後，排序在這條規則後面的同類折扣規則不會再套用">
+                    <label class="rule-stack-wrap" title="勾選後，排序在這條規則後面的同類折扣規則不會再套用">
                         <input type="checkbox" name="stack_exclusive" value="yes" <?php checked( $stack_exclusive, 'yes' ); ?> /> 不與同類折扣疊加
                     </label>
                     <button type="submit" class="button button-primary save-rule-btn">儲存規則</button>
@@ -287,11 +276,11 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
 function twshop_get_rule_tier_row_html( $tier = array() ) {
     ob_start();
     ?>
-    <div class="twshop-tier-row" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start; margin-bottom:8px;">
-        <span style="flex:1; min-width:110px;"><label style="font-size:12px; display:block;">消費滿 ($)</label><input type="number" step="1" min="0" name="tiers_min[]" value="<?php echo esc_attr( $tier['min_amount'] ?? '' ); ?>" style="width:100%;" /></span>
-        <span style="flex:1; min-width:110px;"><label style="font-size:12px; display:block;">折扣類型</label><select name="tiers_type[]" class="twshop-tier-type" style="width:100%;"><option value="percent" <?php selected( $tier['discount_type'] ?? '', 'percent' ); ?>>打折 (%)</option><option value="fixed" <?php selected( $tier['discount_type'] ?? '', 'fixed' ); ?>>折抵 ($)</option></select></span>
-        <span style="flex:1; min-width:140px;"><label style="font-size:12px; display:block;">數值</label><input type="number" step="1" min="0" name="tiers_value[]" class="twshop-tier-value" value="<?php echo esc_attr( $tier['value'] ?? '' ); ?>" style="width:100%;" /><span class="twshop-rule-value-hint twshop-tier-hint"></span></span>
-        <button type="button" class="button twshop-remove-tier-row" style="color:#b32d2e; border-color:#b32d2e; margin-top:17px;">移除</button>
+    <div class="twshop-tier-row">
+        <div class="twshop-rule-field"><label class="twshop-rule-label">消費滿 ($)</label><input type="number" step="any" name="tiers_min[]" value="<?php echo esc_attr( $tier['min_amount'] ?? '' ); ?>" /></div>
+        <div class="twshop-rule-field"><label class="twshop-rule-label">折扣類型</label><select name="tiers_type[]" class="twshop-tier-type"><option value="percent" <?php selected( $tier['discount_type'] ?? '', 'percent' ); ?>>打折 (%)</option><option value="fixed" <?php selected( $tier['discount_type'] ?? '', 'fixed' ); ?>>折抵 ($)</option></select></div>
+        <div class="twshop-rule-field"><label class="twshop-rule-label">數值</label><input type="number" step="any" name="tiers_value[]" class="twshop-tier-value" value="<?php echo esc_attr( $tier['value'] ?? '' ); ?>" /><span class="twshop-rule-value-hint twshop-tier-hint"></span></div>
+        <button type="button" class="button twshop-remove-tier-row twshop-button-danger">移除</button>
     </div>
     <?php
     return ob_get_clean();
@@ -350,11 +339,6 @@ function twshop_ajax_save_rule() {
         'user_limit'        => absint( wp_unslash( $_POST['user_limit'] ?? 0 ) ),
         'start_time'        => sanitize_text_field( wp_unslash( $_POST['start_time'] ?? '' ) ),
         'end_time'          => sanitize_text_field( wp_unslash( $_POST['end_time'] ?? '' ) ),
-        'is_coupon'         => sanitize_text_field( wp_unslash( $_POST['is_coupon'] ?? 'no' ) ),
-        'c_code'            => sanitize_text_field( wp_unslash( $_POST['c_code'] ?? '' ) ),
-        'c_title'           => sanitize_text_field( wp_unslash( $_POST['c_title'] ?? '' ) ),
-        'c_desc'            => sanitize_text_field( wp_unslash( $_POST['c_desc'] ?? '' ) ),
-        'c_exclusive'       => sanitize_text_field( wp_unslash( $_POST['c_exclusive'] ?? 'no' ) ),
         'enabled'           => sanitize_text_field( wp_unslash( $_POST['enabled'] ?? 'no' ) ),
         'stack_exclusive'   => sanitize_text_field( wp_unslash( $_POST['stack_exclusive'] ?? 'no' ) ),
         'buy_qty'           => absint($_POST['buy_qty'] ?? 0),
@@ -363,26 +347,6 @@ function twshop_ajax_save_rule() {
     );
 
     $rules = twshop_get_rules();
-
-    if ( 'yes' === $new_rule['is_coupon'] && '' !== $new_rule['c_code'] && ! preg_match( '/^[A-Za-z0-9_-]+$/', $new_rule['c_code'] ) ) {
-        wp_send_json_error( array( 'msg' => '領取用代碼只能使用英文、數字、- 或 _。' ) );
-    }
-
-    // 優惠券代碼撞名檢查：套用優惠券時 (twshop_apply_visual_coupon()) 是逐筆規則比對、
-    // 找到第一筆符合的就 break，重複代碼會讓後面那筆規則永遠套用不到卻不會有任何警告，
-    // 所以在儲存當下就擋下來，而不是留到顧客套用時才發現規則悄悄失效。
-    if ( 'yes' === $new_rule['is_coupon'] && '' !== $new_rule['c_code'] ) {
-        foreach ( $rules as $r ) {
-            if ( $r['rule_id'] === $rule_id ) continue; // 排除自己（更新既有規則的情況）
-            if ( ! empty( $r['is_coupon'] ) && $r['is_coupon'] === 'yes'
-                && isset( $r['c_code'] ) && strtolower( $r['c_code'] ) === strtolower( $new_rule['c_code'] ) ) {
-                wp_send_json_error( array( 'msg' => '優惠券代碼「' . $new_rule['c_code'] . '」已被其他規則使用，請改用別的代碼。' ) );
-            }
-        }
-        if ( function_exists( 'wc_get_coupon_id_by_code' ) && wc_get_coupon_id_by_code( $new_rule['c_code'] ) ) {
-            wp_send_json_error( array( 'msg' => '優惠券代碼「' . $new_rule['c_code'] . '」已被既有的 WooCommerce 優惠券使用，請改用別的代碼。' ) );
-        }
-    }
 
     // 買N送N：限制條件範圍必填（決定哪些商品的購買數量算進 N），且 M 必須小於 N。
     if ( 'buy_x_get_y' === $new_rule['type'] ) {
@@ -420,7 +384,7 @@ function twshop_ajax_save_rule() {
 }
 
 /**
- * 複製一條已儲存的規則：新 rule_id、名稱加「（複本）」、預設停用、清空優惠券代碼（代碼不可重複），
+ * 複製一條已儲存的規則：新 rule_id、名稱加「（複本）」、預設停用，
  * 插在原規則後面，回傳新卡片 HTML 供前端直接插入。
  */
 function twshop_ajax_duplicate_rule() {
@@ -438,7 +402,6 @@ function twshop_ajax_duplicate_rule() {
             $copy['rule_id'] = uniqid( 'rule_' );
             $copy['name']    = ( $r['name'] ?? '' ) . '（複本）';
             $copy['enabled'] = 'no';
-            $copy['c_code']  = '';
             $new_rules[]     = $copy;
         }
     }

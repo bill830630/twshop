@@ -241,10 +241,6 @@ jQuery(document).ready(function($) {
     $container.on('change', '.twshop-condition-type', function() { updateLogicVisibility($(this).closest('.twshop-rule-form')); });
     $container.on('input change', '.twshop-tier-type, .twshop-tier-value', function() { updateTierHint($(this).closest('.twshop-tier-row')); });
 
-    $container.on('change', '.twshop-coupon-toggle', function() {
-        var $wrap = $(this).closest('.twshop-rule-card').find('.virtual-coupon-wrap');
-        if ($(this).is(':checked')) $wrap.slideDown(); else $wrap.slideUp();
-    });
 
     function applyEnabledLook($card, isEnabled) {
         $card.toggleClass('twshop-rule-disabled', !isEnabled);
@@ -364,17 +360,10 @@ jQuery(document).ready(function($) {
     });
 
     // ── 儲存 ─────────────────────────────────────────────────
-    // 表單設了 novalidate（見 twshop_get_rule_row_html()），只檢查目前看得到、真的會用到的欄位
+    // 表單設了 novalidate（見 twshop_get_rule_row_html()），前端只檢查名稱，其餘由後端驗證
     function validateRuleForm($form) {
         var $name = $form.find('.twshop-rule-name-input');
         if (!$.trim($name.val())) { $name.trigger('focus'); return '請輸入規則名稱'; }
-        if ($form.find('.twshop-coupon-toggle').is(':checked')) {
-            var code = $.trim($form.find('input[name="c_code"]').val());
-            if (code && !/^[A-Za-z0-9_-]+$/.test(code)) {
-                openAndScrollTo($form, 'input[name="c_code"]');
-                return '領取用代碼只能使用英文、數字、- 或 _';
-            }
-        }
         return '';
     }
 

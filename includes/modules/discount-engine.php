@@ -15,13 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * 全外掛呼叫頻率最高的函式（price / is_on_sale / fees / shipping / progress 全部經過）。
  * 加 per-request static cache 包一層外殼，實際判斷邏輯在 twshop_is_discount_rule_valid_compute()。
  *
- * 快取 key 特別注意：呼叫端有 3 處（twshop_get_coupon_progress_items() 與
- * twshop_auto_display_coupons() 兩處）會複製一份 $rule 改寫 c_code/is_coupon 成 $rule_test 再傳入，
- * 目的是刻意繞過「是否已套用此優惠券」的判斷，但 rule_id 跟原始規則完全相同——若 key 只用 rule_id，
- * 會把「真規則」與「c_code/is_coupon 被改寫過的測試副本」兩種不同輸入的結果快取搞混（同一個
- * rule_id 卻可能得到不同答案）。因此 key 額外納入 is_coupon/c_code/c_exclusive 這三個唯一會被
- * 呼叫端改寫的欄位。product_id/user_id/user_roles/cart_total 為函式參數與當前使用者，皆為
- * 直接影響回傳值的輸入，一併納入 key。
+ * 快取 key：product_id/user_id/user_roles/cart_total 皆直接影響回傳值，一併納入。
  */
 function twshop_is_discount_rule_valid( $rule, $user_roles, $cart_total = 0, $product_id = 0 ) {
     static $cache = array();
@@ -30,8 +24,7 @@ function twshop_is_discount_rule_valid( $rule, $user_roles, $cart_total = 0, $pr
     // 等價格 filter 上，一次 fatal 就是整個商店頁白畫面，代價遠高於一次轉型，故保留這道防呆。
     // （目前 16 個呼叫端傳的都是 WP_User::$roles 或 array('customer')，必為陣列；這純粹是保險。）
     $user_roles = (array) $user_roles;
-    $cache_key = ( $rule['rule_id'] ?? '' ) . '|' . ( $rule['is_coupon'] ?? '' ) . '|' . ( $rule['c_code'] ?? '' ) . '|' . ( $rule['c_exclusive'] ?? '' )
-        . '|' . $product_id . '|' . get_current_user_id() . '|' . implode( ',', $user_roles ) . '|' . $cart_total;
+    $cache_key = ( $rule['rule_id'] ?? '' ) . '|' . $product_id . '|' . get_current_user_id() . '|' . implode( ',', $user_roles ) . '|' . $cart_total;
     // 購物車層判斷（$product_id = 0）且規則有條件時，結果取決於購物車內容，同一請求內內容可能變動。
     if ( 0 === (int) $product_id ) {
         list( $cond_type, $cond_values ) = twshop_get_rule_condition( $rule );
@@ -137,14 +130,8 @@ function twshop_is_discount_rule_valid_compute( $rule, $user_roles, $cart_total 
     if ( !empty($rule['end_time']) && $now > strtotime($rule['end_time']) ) return false;
     if ( $rule['role'] !== 'all' && ! in_array( $rule['role'], $user_roles ) ) return false;
     
-    if ( !empty($rule['is_coupon']) && $rule['is_coupon'] === 'yes' ) {
-        $applied_rules = WC()->session ? WC()->session->get('twshop_applied_rules', array()) : array();
-        if ( empty($rule['c_code']) || !in_array($rule['c_code'], $applied_rules) ) return false;
-        if ( !empty($rule['c_exclusive']) && $rule['c_exclusive'] === 'yes' ) {
-            if ( WC()->cart && !empty(WC()->cart->get_applied_coupons()) ) return false;
-            if ( count($applied_rules) > 1 ) return false;
-        }
-    }
+    // 已移除的「優惠卡券」規則一律不生效（twshop_migrate_removed_rule_coupons() 會把它們停用；這裡是保險）
+    if ( 'yes' === ( $rule['is_coupon'] ?? 'no' ) ) return false;
 
     $t_limit = intval($rule['usage_limit'] ?? 0);
     $u_limit = intval($rule['user_limit'] ?? 0);

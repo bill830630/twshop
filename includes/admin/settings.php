@@ -70,11 +70,6 @@ function twshop_sanitize_discount_rules_settings( $input ) {
             'user_limit'        => absint( $rule['user_limit'] ?? 0 ),
             'start_time'        => sanitize_text_field( $rule['start_time'] ?? '' ),
             'end_time'          => sanitize_text_field( $rule['end_time'] ?? '' ),
-            'is_coupon'         => sanitize_text_field( $rule['is_coupon'] ?? 'no' ),
-            'c_code'            => sanitize_text_field( $rule['c_code'] ?? '' ),
-            'c_title'           => sanitize_text_field( $rule['c_title'] ?? '' ),
-            'c_desc'            => sanitize_text_field( $rule['c_desc'] ?? '' ),
-            'c_exclusive'       => sanitize_text_field( $rule['c_exclusive'] ?? 'no' ),
             'enabled'           => sanitize_text_field( $rule['enabled'] ?? 'no' ),
             'stack_exclusive'   => sanitize_text_field( $rule['stack_exclusive'] ?? 'no' ),
             'buy_qty'           => absint( $rule['buy_qty'] ?? 0 ),
@@ -163,7 +158,6 @@ function twshop_register_settings() {
     register_setting( 'wc_marketing_coupons_group', 'wc_coupon_dialog_trigger_none_text', 'sanitize_text_field' );
     register_setting( 'wc_marketing_coupons_group', 'wc_coupon_dialog_trigger_applied_text', 'sanitize_text_field' );
     register_setting( 'wc_marketing_coupons_group', 'wc_coupon_dialog_heading', 'sanitize_text_field' );
-    register_setting( 'wc_marketing_coupons_group', 'wc_coupon_exclusive_error_text', 'sanitize_text_field' );
 
     // 行銷 ▸ 折扣規則（加購商品顯示文字小表單，規則本身走 AJAX 不受影響）
     register_setting( 'wc_marketing_rules_group', 'wc_addon_section_title', 'sanitize_text_field' );

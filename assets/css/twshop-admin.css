@@ -272,3 +272,28 @@ input:checked + .twshop-slider:before { transform:translateX(20px); }
 .twshop-rule-schedule label{ font-weight:normal; display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
 .twshop-rule-schedule input{ width:150px; }
 #twshop-rule-toolbar-status{ margin:0; }
+/* 規則卡片內容統一格線（v25.8.50）：三欄等寬，長欄位跨兩欄或整列，所有區段同一套外觀 */
+.twshop-rule-card .twshop-card-body{ padding:16px 20px 20px; }
+.twshop-rule-section{ background:#fafafa; border:1px solid #e5e5e5; border-radius:4px; padding:14px 16px; margin:0 0 14px; }
+.twshop-rule-grid{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px 16px; align-items:start; }
+.twshop-rule-grid > .is-wide{ grid-column:span 2; }
+.twshop-rule-grid > .is-full{ grid-column:1 / -1; }
+.twshop-rule-grid > .is-row-start{ grid-column-start:1; }
+.twshop-rule-field{ min-width:0; }
+.twshop-rule-label{ display:block; margin:0 0 4px; font-size:13px; font-weight:600; color:#1d2327; }
+.twshop-rule-label small, .twshop-rule-checklist small{ font-weight:normal; color:#8c8f94; margin-left:4px; }
+.twshop-rule-field input[type="text"], .twshop-rule-field input[type="number"], .twshop-rule-field select{ width:100%; max-width:100%; box-sizing:border-box; }
+.twshop-rule-field .select2-container{ width:100% !important; }
+.twshop-rule-grid > .twshop-rule-hint{ margin:0; }
+.twshop-rule-checklist{ display:flex; flex-wrap:wrap; gap:6px 20px; }
+.twshop-rule-checklist label{ font-weight:normal; }
+.twshop-tier-row{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)) auto; gap:10px 16px; align-items:end; margin-bottom:10px; }
+.twshop-tier-row .twshop-rule-value-hint{ position:absolute; }
+.twshop-tier-row .twshop-rule-field{ position:relative; padding-bottom:18px; }
+.twshop-tier-row .twshop-remove-tier-row{ margin-bottom:18px; }
+.twshop-button-danger{ color:#b32d2e !important; border-color:#b32d2e !important; }
+.twshop-rule-footer{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding-top:14px; border-top:1px solid #eee; }
+.twshop-rule-footer-group{ display:flex; align-items:center; flex-wrap:wrap; gap:10px 14px; }
+.twshop-rule-footer .rule-stack-wrap{ font-weight:normal; }
+@media (max-width: 1100px){ .twshop-rule-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); } .twshop-rule-grid > .is-wide{ grid-column:1 / -1; } }
+@media (max-width: 700px){ .twshop-rule-grid, .twshop-tier-row{ grid-template-columns:minmax(0, 1fr); } .twshop-rule-grid > .is-wide{ grid-column:auto; } }

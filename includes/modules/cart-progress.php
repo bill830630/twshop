@@ -40,7 +40,7 @@ function twshop_finalize_progress_items( array $items, $cart_total ) {
 
 /**
  * 掃描目前「除了金額以外」條件都成立、但購物車尚未達到最低消費門檻的視覺化優惠券
- * （WC 原生 + 折扣規則衍生皆含），組成跟折扣規則進度項目相同格式的原始項目（尚未補上
+ * （WooCommerce 原生優惠券；折扣規則衍生的卡券已於 v25.8.50 移除），組成跟折扣規則進度項目相同格式的原始項目（尚未補上
  * achieved/remaining/percent，見 twshop_finalize_progress_items()），供「滿額進度提示」
  * 區塊與 mini cart 摘要共用（v25.5.94）。已使用完（個人使用上限）／已過期／全站已達使用上限／
  * 僅供手動輸入的優惠券不列入，排除邏輯比照 twshop_auto_display_coupons() 但刻意簡化
@@ -49,8 +49,7 @@ function twshop_finalize_progress_items( array $items, $cart_total ) {
 /**
  * 這支函式的輸出（優惠券清單本身與各自的最低消費門檻）完全不依賴購物車小計——「是否已達標」
  * 是呼叫端 twshop_get_cart_progress_items() 最後透過 twshop_finalize_progress_items( $items,
- * $cart_total ) 才另外算出來的，不在這裡。折扣規則優惠券驗證用的 $rule_test 也刻意把
- * c_code/is_coupon 改寫繞過「是否已套用」判斷，同樣與購物車狀態無關。因此可以安全地只用
+ * $cart_total ) 才另外算出來的，不在這裡。因此可以安全地只用
  * 「當前使用者」當 key（user_id + roles，guest 一律 user_id=0，同一批 guest 共用同一份結果，
  * 語意等價，因為 guest 之間 email/roles 本來就相同、都會走同一組判斷分支）。
  */
@@ -107,43 +106,6 @@ function twshop_get_coupon_progress_items() {
         }
     }
 
-    if ( twshop_module_enabled( 'discount_rules' ) ) {
-        foreach ( twshop_get_rules() as $rule ) {
-            if ( empty( $rule['is_coupon'] ) || 'yes' !== $rule['is_coupon'] ) continue;
-            if ( empty( $rule['c_code'] ) || empty( $rule['c_title'] ) ) continue;
-
-            if ( ! empty( $rule['end_time'] ) ) {
-                try {
-                    $rule_end = new DateTime( $rule['end_time'], wp_timezone() );
-                    if ( $rule_end < current_datetime() ) continue;
-                } catch ( Exception $e ) {}
-            }
-
-            $t_limit = intval( $rule['usage_limit'] ?? 0 );
-            if ( $t_limit > 0 && twshop_get_rule_usage_total( $rule['rule_id'] ) >= $t_limit ) continue;
-
-            $u_limit = intval( $rule['user_limit'] ?? 0 );
-            if ( is_user_logged_in() && $u_limit > 0 ) {
-                $user_used = intval( get_user_meta( $user_id, 'twshop_rule_usage_' . $rule['rule_id'], true ) );
-                if ( $user_used >= $u_limit ) continue;
-            }
-
-            if ( $rule['role'] !== 'all' && ! in_array( $rule['role'], $user_roles, true ) ) continue;
-
-            $min = floatval( $rule['min_amount'] ?? 0 );
-            if ( $min <= 0 ) continue;
-
-            $rule_test = $rule; $rule_test['c_code'] = ''; $rule_test['is_coupon'] = 'no';
-            if ( ! twshop_is_discount_rule_valid( $rule_test, $user_roles, PHP_INT_MAX, 0 ) ) continue;
-
-            $items[] = array(
-                'type'           => 'coupon',
-                'threshold'      => $min,
-                'title'          => '再消費 {amount} 即可使用「' . esc_html( $rule['c_title'] ) . '」',
-                'achieved_title' => '🎉 可使用「' . esc_html( $rule['c_title'] ) . '」了',
-            );
-        }
-    }
 
     $cache[ $cache_key ] = $items;
     return $items;
@@ -365,8 +327,6 @@ function twshop_render_mini_cart_progress() {
  * 原本訪客直接略過、且用事後重算有效性判斷，沒套用的規則也會被計次）。
  */
 function twshop_increment_rule_usage_limits( $order_id, $posted_data, $order ) {
-    if ( WC()->session ) WC()->session->set( 'twshop_applied_rules', array() );
-
     if ( get_post_meta($order_id, '_twshop_rules_recorded', true) ) return;
     update_post_meta($order_id, '_twshop_rules_recorded', 'yes');
 
@@ -382,17 +342,5 @@ function twshop_increment_rule_usage_limits( $order_id, $posted_data, $order ) {
     }
 }
 
-function twshop_check_exclusive_coupons($valid, $coupon) {
-    $applied_rules = WC()->session ? WC()->session->get('twshop_applied_rules', array()) : array();
-    if (!empty($applied_rules)) {
-        $rules = twshop_get_rules();
-        foreach($rules as $r) {
-            if ( ! empty( $r['c_code'] ) && in_array( $r['c_code'], $applied_rules, true ) && ! empty( $r['c_exclusive'] ) && $r['c_exclusive'] === 'yes' ) {
-                throw new Exception( str_replace( '{noun}', twshop_option( 'wc_general_coupon_noun' ), twshop_option( 'wc_coupon_exclusive_error_text' ) ) );
-            }
-        }
-    }
-    return $valid;
-}
 
 

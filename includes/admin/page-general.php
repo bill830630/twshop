@@ -26,7 +26,6 @@ function twshop_marketing_coupons_tab() {
     $dialog_trigger_none    = twshop_option( 'wc_coupon_dialog_trigger_none_text' );
     $dialog_trigger_applied = twshop_option( 'wc_coupon_dialog_trigger_applied_text' );
     $dialog_heading         = twshop_option( 'wc_coupon_dialog_heading' );
-    $exclusive_error_text   = twshop_option( 'wc_coupon_exclusive_error_text' );
     ?>
         <form action="options.php" method="post">
             <?php settings_fields( 'wc_marketing_coupons_group' ); ?>
@@ -67,13 +66,6 @@ function twshop_marketing_coupons_tab() {
                         </tr>
                         <tr><th scope="row">彈窗開啟按鈕（已套用）</th><td><input type="text" name="wc_coupon_dialog_trigger_applied_text" value="<?php echo esc_attr( $dialog_trigger_applied ); ?>" class="regular-text" /></td></tr>
                         <tr><th scope="row">彈窗標題</th><td><input type="text" name="wc_coupon_dialog_heading" value="<?php echo esc_attr( $dialog_heading ); ?>" class="regular-text" /></td></tr>
-                        <tr>
-                            <th scope="row">排他限制錯誤訊息</th>
-                            <td>
-                                <input type="text" name="wc_coupon_exclusive_error_text" value="<?php echo esc_attr( $exclusive_error_text ); ?>" class="regular-text" />
-                                <p class="description">「單獨使用」優惠券與其他優惠券衝突時顯示的訊息，可用 <code>{noun}</code> 代表「優惠券」名稱。</p>
-                            </td>
-                        </tr>
                     </table>
                 </div>
             </div>

@@ -909,34 +909,6 @@ function twshop_build_wc_coupon_restrictions( WC_Coupon $coupon ) {
     return implode( '｜', $parts );
 }
 
-function twshop_build_rule_coupon_restrictions( $rule ) {
-    $parts = array();
-    $min = floatval( $rule['min_amount'] ?? 0 );
-    if ( $min > 0 ) $parts[] = '消費滿 NT$' . number_format( $min, 0 );
-    if ( ! empty( $rule['role'] ) && $rule['role'] !== 'all' ) {
-        $wp_roles  = wp_roles();
-        $role_name = isset( $wp_roles->roles[ $rule['role'] ] ) ? $wp_roles->roles[ $rule['role'] ]['name'] : $rule['role'];
-        $parts[] = $role_name . ' 限定';
-    }
-    list( $cond_type, $cond_values ) = twshop_get_rule_condition( $rule );
-    if ( ! empty( $cond_type ) && ! empty( $cond_values ) ) {
-        $names = array();
-        if ( $cond_type === 'product' ) {
-            foreach ( (array) $cond_values as $pid ) { $p = wc_get_product( $pid ); if ( $p ) $names[] = $p->get_name(); }
-            if ( $names ) $parts[] = '指定商品：' . implode( '、', $names );
-        } elseif ( $cond_type === 'category' ) {
-            foreach ( (array) $cond_values as $slug ) { $t = get_term_by( 'slug', $slug, 'product_cat' ); if ( $t && ! is_wp_error( $t ) ) $names[] = $t->name; }
-            if ( $names ) $parts[] = '指定分類：' . implode( '、', $names );
-        } elseif ( $cond_type === 'tag' ) {
-            foreach ( (array) $cond_values as $slug ) { $t = get_term_by( 'slug', $slug, 'product_tag' ); if ( $t && ! is_wp_error( $t ) ) $names[] = $t->name; }
-            if ( $names ) $parts[] = '指定標籤：' . implode( '、', $names );
-        }
-    }
-    if ( ! empty( $rule['c_exclusive'] ) && $rule['c_exclusive'] === 'yes' ) $parts[] = '不可與其他優惠同用';
-    $user_limit = intval( $rule['user_limit'] ?? 0 );
-    if ( $user_limit > 0 ) $parts[] = '每人限用 ' . $user_limit . ' 次';
-    return implode( '｜', $parts );
-}
 
 function twshop_format_wc_coupon_discount( $discount_type, $amount ) {
     $amount = floatval( $amount );
@@ -1044,7 +1016,6 @@ function twshop_auto_display_coupons($location = 'account') {
     $user_id = get_current_user_id();
     $email = is_user_logged_in() ? wp_get_current_user()->user_email : '';
     $user_roles = is_user_logged_in() ? wp_get_current_user()->roles : array('customer');
-    $applied_rules = WC()->session ? WC()->session->get('twshop_applied_rules', array()) : array();
     $found_any = false;
     $card_count = 0;
     $any_applied = false;
@@ -1139,92 +1110,6 @@ function twshop_auto_display_coupons($location = 'account') {
             // 「還差 $X 即可使用」提示，判斷全在 twshop_build_coupon_gap_html() 內（含各版本修正的來由）。
             $gap_html = twshop_build_coupon_gap_html(
                 $coupon_obj->get_minimum_amount(), $already_used_up, $location
-            );
-
-            twshop_finalize_coupon_card(
-                $code, $display_title, $display_desc, $expiry_date, $is_used, $is_applied, $location, $shop_url,
-                $output_cards_available, $output_cards_unavailable, $found_any, $card_count, $any_applied,
-                $gap_html
-            );
-        }
-    }
-
-    // discount_rules 模組停用時，規則衍生的視覺化優惠券卡片也要一併不顯示——這批卡片套用後
-    // 實際折抵是靠 twshop_apply_cart_discount_rules() 等 hook（全部掛在 discount_rules 模組底下）
-    // 計算，模組關閉時那些 hook 根本沒註冊，卡片若照樣顯示、顧客點「套用」會顯示成功卻完全沒有
-    // 折抵，是會誤導顧客的幽靈優惠券（v25.5.82 修正）。純 WC_Coupon 那半段（上面的迴圈）不受影響，
-    // 不依賴 discount_rules 模組。
-    $rules = twshop_module_enabled( 'discount_rules' ) ? twshop_get_rules() : array();
-    if ( !empty($rules) ) {
-        foreach ( $rules as $rule ) {
-            if ( empty($rule['is_coupon']) || $rule['is_coupon'] !== 'yes' ) continue;
-            if ( empty($rule['c_code']) || empty($rule['c_title']) ) continue;
-
-            // 已過期／全站已達使用上限都是「不會再變回可用」的永久狀態，不分場景一律不顯示
-            // （相對於下面 $is_used 那類「目前不符資格」，購物車頁面還會用「暫不可用」顯示出來）。
-            if ( ! empty( $rule['end_time'] ) ) {
-                try {
-                    $rule_end = new DateTime( $rule['end_time'], wp_timezone() );
-                    if ( $rule_end < current_datetime() ) continue;
-                } catch ( Exception $e ) {}
-            }
-
-            $t_limit = intval($rule['usage_limit'] ?? 0);
-            $u_limit = intval($rule['user_limit'] ?? 0);
-            if ($t_limit > 0 && twshop_get_rule_usage_total( $rule['rule_id'] ) >= $t_limit) continue;
-            
-            $is_used = false;
-            // 個人使用上限已達成是永久狀態，跟下方 twshop_is_discount_rule_valid() 檢查出的
-            // 「未達最低消費」等暫時性狀態分開記錄，避免下方「還差 $X」滿額提示誤判（見同一段
-            // 邏輯在 WC 優惠券迴圈的說明，v25.5.93 修正）。
-            $already_used_up = false;
-            if (is_user_logged_in() && $u_limit > 0) {
-                $user_used = intval(get_user_meta($user_id, 'twshop_rule_usage_' . $rule['rule_id'], true));
-                if ($user_used >= $u_limit) {
-                    $is_used = true;
-                    $already_used_up = true;
-                }
-            }
-
-            // 帳戶頁（我的優惠券）：已使用的優惠券不需要顯示，直接跳過；
-            // 購物車/結帳頁維持顯示「暫不可用」（見下方），兩種情境的需求不同。
-            if ( 'account' === $location && $is_used ) continue;
-
-            if ($rule['role'] !== 'all' && !in_array($rule['role'], $user_roles)) continue;
-
-            $code = $rule['c_code'];
-
-            // 購物車/結帳頁：目前不符合套用資格的優惠券不再直接隱藏，改標記 $is_used 沿用
-            // 「灰階＋停用」外觀顯示出來（詳見上方 WC 優惠券迴圈的同一段說明）。
-            if ( ( $location === 'cart' || $location === 'checkout' ) && ! $is_used ) {
-                $cart_total = WC()->cart ? WC()->cart->get_subtotal() : 0;
-                $rule_test = $rule; $rule_test['c_code'] = ''; $rule_test['is_coupon'] = 'no';
-                if (!twshop_is_discount_rule_valid($rule_test, $user_roles, $cart_total, 0)) {
-                    $applies_to_cart = false;
-                    if (WC()->cart) {
-                        foreach (WC()->cart->get_cart() as $cart_item) {
-                            if (twshop_is_discount_rule_valid($rule_test, $user_roles, $cart_total, $cart_item['product_id'])) { $applies_to_cart = true; break; }
-                        }
-                    }
-                    if (!$applies_to_cart) $is_used = true;
-                }
-            }
-
-            $is_applied = in_array($code, $applied_rules);
-            $expiry_date = !empty($rule['end_time']) ? date('Y-m-d', strtotime($rule['end_time'])) : '無期限';
-            $discount_text = twshop_format_rule_discount($rule['type'], $rule['value'], $rule);
-
-            $auto_title    = wp_strip_all_tags( $discount_text );
-            $auto_desc     = twshop_build_rule_coupon_restrictions( $rule );
-            $display_title = ( $rule['c_title'] ?? '' ) ?: $auto_title;
-            $display_desc  = ( $rule['c_desc'] ?? '' ) ?: $auto_desc;
-
-            list( $rule_cond_type, $rule_cond_values ) = twshop_get_rule_condition( $rule );
-            $shop_url = twshop_get_coupon_shop_url( $rule_cond_type, $rule_cond_values );
-
-            // 同上，只是門檻改讀 $rule['min_amount']（規則本身的欄位，跟 WC_Coupon::get_minimum_amount() 對應）。
-            $gap_html = twshop_build_coupon_gap_html(
-                $rule['min_amount'] ?? 0, $already_used_up, $location
             );
 
             twshop_finalize_coupon_card(
@@ -1357,57 +1242,29 @@ function twshop_apply_visual_coupon() {
     check_ajax_referer( 'twshop_frontend_action', 'twshop_nonce' );
     if ( ! isset( WC()->cart ) || empty( $_POST['coupon_code'] ) ) wp_send_json_error( array( 'message' => '發生錯誤' ) );
     $code = sanitize_text_field( wp_unslash( $_POST['coupon_code'] ?? '' ) );
-    // discount_rules 模組停用時不比對規則衍生優惠券代碼，直接落到下面當一般 WC 優惠券處理
-    // （會因為這種代碼不是真正的 shop_coupon 貼文而正確回報「套用失敗」，跟卡片本身已經不會
-    // 顯示的狀態一致，見 twshop_auto_display_coupons() 的同一處修正，v25.5.82）。
-    $rules = twshop_module_enabled( 'discount_rules' ) ? get_option( 'wc_discount_rules_settings', array() ) : array();
-    $is_rule_coupon = false;
-    foreach ($rules as $rule) {
-        if ( ! empty( $rule['is_coupon'] ) && $rule['is_coupon'] === 'yes' && ! empty( $rule['c_code'] ) && 0 === strcasecmp( $rule['c_code'], $code ) ) {
-            $code = $rule['c_code']; // 以規則設定的大小寫為準，後續 session 比對才一致
-            if (!empty($rule['c_exclusive']) && $rule['c_exclusive'] === 'yes') {
-                if ( WC()->cart && !empty(WC()->cart->get_applied_coupons()) ) wp_send_json_error( array( 'message' => str_replace( '{noun}', twshop_option( 'wc_general_coupon_noun' ), twshop_option( 'wc_coupon_exclusive_error_text' ) ) ) );
-            }
-            $is_rule_coupon = true;
-            $applied = WC()->session->get('twshop_applied_rules', array());
-            if (!in_array($code, $applied)) { $applied[] = $code; WC()->session->set('twshop_applied_rules', $applied); }
-            break;
-        }
-    }
-    if ( $is_rule_coupon ) {
+    if ( WC()->cart->add_discount( $code ) ) {
         if ( function_exists('wc_clear_notices') && isset( WC()->session ) ) wc_clear_notices();
         wp_send_json_success( array( 'message' => '套用成功' ) );
     } else {
-        if ( WC()->cart->add_discount( $code ) ) {
-            if ( function_exists('wc_clear_notices') && isset( WC()->session ) ) wc_clear_notices();
-            wp_send_json_success( array( 'message' => '套用成功' ) );
-        } else {
-            // add_discount() 失敗時，WooCommerce 自己已經透過 wc_add_notice() 產生了具體原因
-            // （已過期、未達最低消費、代碼不存在等）；在 wc_clear_notices() 清掉之前先擷取，
-            // 避免固定用一句「已被排他限制」蓋掉真正原因——排他限制在上面已經獨立處理過，
-            // 這裡走到失敗多半是別的原因，用固定文字反而誤導。
-            $specific_message = '';
-            if ( function_exists( 'wc_get_notices' ) ) {
-                $error_notices = wc_get_notices( 'error' );
-                if ( ! empty( $error_notices ) ) {
-                    $first = reset( $error_notices );
-                    $specific_message = is_array( $first ) ? ( $first['notice'] ?? '' ) : (string) $first;
-                }
+        // add_discount() 失敗時，WooCommerce 自己已經透過 wc_add_notice() 產生了具體原因
+        // （已過期、未達最低消費、代碼不存在等）；在 wc_clear_notices() 清掉之前先擷取，
+        // 避免固定用一句話蓋掉真正原因。
+        $specific_message = '';
+        if ( function_exists( 'wc_get_notices' ) ) {
+            $error_notices = wc_get_notices( 'error' );
+            if ( ! empty( $error_notices ) ) {
+                $first = reset( $error_notices );
+                $specific_message = is_array( $first ) ? ( $first['notice'] ?? '' ) : (string) $first;
             }
-            if ( function_exists('wc_clear_notices') && isset( WC()->session ) ) wc_clear_notices();
-            wp_send_json_error( array( 'message' => $specific_message ?: '套用失敗，請確認優惠券代碼是否正確或是否符合使用條件。' ) );
         }
+        if ( function_exists('wc_clear_notices') && isset( WC()->session ) ) wc_clear_notices();
+        wp_send_json_error( array( 'message' => $specific_message ?: '套用失敗，請確認優惠券代碼是否正確或是否符合使用條件。' ) );
     }
 }
 function twshop_remove_visual_coupon() {
     check_ajax_referer( 'twshop_frontend_action', 'twshop_nonce' );
     if ( ! isset( WC()->cart ) || empty( $_POST['coupon_code'] ) ) wp_send_json_error( array( 'message' => '發生錯誤' ) );
     $code = sanitize_text_field( wp_unslash( $_POST['coupon_code'] ?? '' ) );
-    $applied = WC()->session->get('twshop_applied_rules', array());
-    if (($key = array_search($code, $applied)) !== false) {
-        unset($applied[$key]);
-        WC()->session->set('twshop_applied_rules', array_values($applied));
-    }
     WC()->cart->remove_coupon( $code );
     if ( function_exists('wc_clear_notices') && isset( WC()->session ) ) wc_clear_notices();
     wp_send_json_success( array( 'message' => '已取消套用' ) );

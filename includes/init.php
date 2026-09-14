@@ -88,6 +88,7 @@ function twshop_membership_init() {
     add_action( 'admin_enqueue_scripts', 'twshop_admin_external_scripts' );
 
     add_action( 'admin_init', 'twshop_register_settings' );
+    add_action( 'admin_init', 'twshop_maybe_migrate_removed_rule_coupons' );
     add_action( 'admin_init', 'twshop_maybe_reset_account_tabs' );
 
     // 運送／付款方式改名：不綁任何模組開關。這是純顯示偏好，跟 order_checkout_enhancements
@@ -204,7 +205,6 @@ function twshop_membership_init() {
         add_filter( 'woocommerce_cart_shipping_packages', 'twshop_add_rules_context_to_shipping_packages' );
         add_action( 'woocommerce_checkout_create_order', 'twshop_store_applied_rule_ids_on_order', 10, 1 );
         add_action( 'woocommerce_checkout_order_processed', 'twshop_increment_rule_usage_limits', 10, 3 );
-        add_filter( 'woocommerce_coupon_is_valid', 'twshop_check_exclusive_coupons', 10, 2 );
         add_action( 'woocommerce_before_calculate_totals', 'twshop_auto_manage_gifts_and_addons', 10, 1 );
         add_filter( 'woocommerce_add_cart_item_data', 'twshop_mark_addon_cart_item', 10, 3 );
         add_filter( 'woocommerce_cart_item_quantity', 'twshop_lock_addon_item_quantity', 10, 3 );
