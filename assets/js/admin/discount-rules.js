@@ -36,6 +36,8 @@ jQuery(document).ready(function($) {
     }
     $container.on('input change', '.twshop-rule-form :input', function() {
         if (!dirtyTrackingOn || $(this).hasClass('twshop-rule-select')) return;
+        // 已儲存規則的啟用開關會立刻存檔，不算未儲存的修改
+        if ($(this).hasClass('twshop-rule-enabled-toggle') && $(this).closest('.twshop-rule-form').find('input[name="rule_id"]').val()) return;
         setDirty($(this).closest('.twshop-rule-form'), true);
     });
     $container.on('click', '.twshop-chip-remove, .twshop-add-tier-row, .twshop-remove-tier-row, .twshop-clear-datetime', function() {
@@ -153,12 +155,40 @@ jQuery(document).ready(function($) {
         if ($(this).is(':checked')) $wrap.slideDown(); else $wrap.slideUp();
     });
 
-    $container.on('change', '.twshop-rule-enabled-toggle', function() {
-        var $card = $(this).closest('.twshop-rule-card');
-        var isEnabled = $(this).is(':checked');
+    function applyEnabledLook($card, isEnabled) {
         $card.toggleClass('twshop-rule-disabled', !isEnabled);
         $card.find('.twshop-rule-disabled-badge').toggle(!isEnabled);
         $card.attr('data-rule-enabled', isEnabled ? 'yes' : 'no');
+    }
+
+    // 已儲存的規則：切換啟用開關就立刻存（只改啟用狀態，不會連帶送出卡片裡其他未儲存的修改）；
+    // 還沒存過的新規則沒有 rule_id，維持跟著「儲存」一起送出。
+    $container.on('change', '.twshop-rule-enabled-toggle', function() {
+        var $toggle = $(this);
+        var $card = $toggle.closest('.twshop-rule-card');
+        var isEnabled = $toggle.is(':checked');
+        applyEnabledLook($card, isEnabled);
+
+        var ruleId = $card.find('input[name="rule_id"]').val();
+        if (!ruleId || !dirtyTrackingOn) return;
+
+        $toggle.prop('disabled', true);
+        $.post(twshopDiscountRules.ajaxUrl, { action: 'twshop_batch_update_rules', action_type: isEnabled ? 'enable' : 'disable', rule_ids: [ruleId], twshop_nonce: twshopAdminNonce })
+            .done(function(res) {
+                if (res && res.success) {
+                    showCardStatus($card, 'success', '✓ 已' + (isEnabled ? '啟用' : '停用') + ' ' + nowHM());
+                } else {
+                    $toggle.prop('checked', !isEnabled);
+                    applyEnabledLook($card, !isEnabled);
+                    showCardStatus($card, 'error', ajaxErrorMsg(res, '切換失敗，請重新整理頁面後再試'));
+                }
+            })
+            .fail(function() {
+                $toggle.prop('checked', !isEnabled);
+                applyEnabledLook($card, !isEnabled);
+                showCardStatus($card, 'error', '切換失敗，請檢查網路連線後重試');
+            })
+            .always(function() { $toggle.prop('disabled', false); });
     });
 
     function openAndScrollTo($card, focusSelector) {
