@@ -359,38 +359,27 @@ function twshop_render_mini_cart_progress() {
     <?php
 }
 
+/**
+ * 規則使用次數：只計「建立訂單當下實際套用到」的規則（twshop_store_applied_rule_ids_on_order() 存的
+ * _twshop_applied_rule_ids）。訪客訂單也計入全站總次數，只是沒有個人次數可記（v25.8.35 修正：
+ * 原本訪客直接略過、且用事後重算有效性判斷，沒套用的規則也會被計次）。
+ */
 function twshop_increment_rule_usage_limits( $order_id, $posted_data, $order ) {
+    if ( WC()->session ) WC()->session->set( 'twshop_applied_rules', array() );
+
     if ( get_post_meta($order_id, '_twshop_rules_recorded', true) ) return;
     update_post_meta($order_id, '_twshop_rules_recorded', 'yes');
 
-    $rules = twshop_get_rules();
+    $rule_ids = $order->get_meta( '_twshop_applied_rule_ids' );
+    if ( ! is_array( $rule_ids ) || empty( $rule_ids ) ) return;
+
     $user_id = $order->get_customer_id();
-    if ( !$user_id ) return;
-
-    $user_roles = (new WP_User($user_id))->roles;
-    $cart_total = $order->get_subtotal();
-    $items = $order->get_items();
-
-    foreach ( $rules as $rule ) {
-        $applied = false;
-        if ( !empty($rule['is_coupon']) && $rule['is_coupon'] === 'yes' ) {
-            $applied_rules = WC()->session ? WC()->session->get('twshop_applied_rules', array()) : array();
-            if ( in_array($rule['c_code'], $applied_rules) ) $applied = true;
-        } else {
-            if ( $rule['type'] === 'cart_discount' || $rule['type'] === 'cart_percent' || $rule['type'] === 'free_shipping' || $rule['type'] === 'free_gift' ) {
-                if ( twshop_is_discount_rule_valid($rule, $user_roles, $cart_total, 0) ) $applied = true;
-            } else {
-                foreach ( $items as $item ) { if ( twshop_is_discount_rule_valid($rule, $user_roles, $cart_total, $item->get_product_id()) ) { $applied = true; break; } }
-            }
-        }
-
-        if ( $applied ) {
-            $r_id = $rule['rule_id'];
-            twshop_increment_rule_usage_total( $r_id );
-            update_user_meta($user_id, 'twshop_rule_usage_' . $r_id, intval(get_user_meta($user_id, 'twshop_rule_usage_' . $r_id, true)) + 1);
+    foreach ( $rule_ids as $r_id ) {
+        twshop_increment_rule_usage_total( $r_id );
+        if ( $user_id ) {
+            update_user_meta( $user_id, 'twshop_rule_usage_' . $r_id, intval( get_user_meta( $user_id, 'twshop_rule_usage_' . $r_id, true ) ) + 1 );
         }
     }
-    if ( WC()->session ) WC()->session->set('twshop_applied_rules', array());
 }
 
 function twshop_check_exclusive_coupons($valid, $coupon) {

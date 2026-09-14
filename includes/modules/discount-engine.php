@@ -410,8 +410,17 @@ function twshop_add_discount_context_to_variation_price_hash( $price_hash ) {
 }
 
 function twshop_get_calculated_discount_price( $price, $product, $user_roles ) {
+    return twshop_calculate_product_discount( $price, $product, $user_roles )['price'];
+}
+
+/**
+ * 商品層折扣計算本體：回傳 [ 'price' => 折扣後價格或 false（無規則生效）, 'rule_ids' => 實際生效的規則 ID ]。
+ * rule_ids 供結帳時記錄規則使用次數（twshop_collect_applied_rule_ids()），只算真正套用到的規則，
+ * 被 stack_exclusive 擋掉的不算。
+ */
+function twshop_calculate_product_discount( $price, $product, $user_roles ) {
     $rules = twshop_get_rules();
-    if ( empty($rules) ) return false;
+    if ( empty($rules) ) return array( 'price' => false, 'rule_ids' => array() );
     $product_id = $product->get_id();
     $cart_total = WC()->cart ? WC()->cart->get_subtotal() : 0;
 
@@ -429,14 +438,14 @@ function twshop_get_calculated_discount_price( $price, $product, $user_roles ) {
     if ( array_key_exists( $cache_key, $cache ) ) return $cache[ $cache_key ];
 
     $final_price = floatval($price);
-    $applied = false;
+    $applied_ids = array();
 
     // 疊加群組 A（product 層）：percent + fixed_product 依卡片排序（優先權）逐一套用；
     // 遇到第一筆 stack_exclusive='yes' 的有效規則就只套用它、不再套用同群組其餘規則。
     foreach ( $rules as $rule ) {
         if ( $rule['type'] === 'percent' || $rule['type'] === 'fixed_product' ) {
             if ( twshop_is_discount_rule_valid( $rule, $user_roles, $cart_total, $condition_product_id ) ) {
-                $applied = true;
+                $applied_ids[] = $rule['rule_id'];
                 if ( $rule['type'] === 'percent' ) $final_price = $final_price * ( floatval($rule['value']) / 100 );
                 elseif ( $rule['type'] === 'fixed_product' ) $final_price = $final_price - floatval($rule['value']);
                 if ( ( $rule['stack_exclusive'] ?? 'no' ) === 'yes' ) break;
@@ -444,7 +453,10 @@ function twshop_get_calculated_discount_price( $price, $product, $user_roles ) {
         }
     }
 
-    $result = $applied ? max(0, $final_price) : false;
+    $result = array(
+        'price'    => $applied_ids ? max( 0, $final_price ) : false,
+        'rule_ids' => $applied_ids,
+    );
     $cache[ $cache_key ] = $result;
     return $result;
 }
@@ -632,10 +644,22 @@ function twshop_get_matching_cart_tier( $rule, $cart_total ) {
 
 function twshop_apply_cart_discount_rules( $cart ) {
     if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return;
+    foreach ( twshop_get_cart_discount_fees( $cart ) as $fee ) {
+        $cart->add_fee( $fee['label'], -1 * $fee['amount'], true );
+    }
+}
+
+/**
+ * 購物車層折扣（群組 B）實際會加上的費用清單，每筆 [ 'rule_id', 'label', 'amount'（正數） ]。
+ * 加費用（twshop_apply_cart_discount_rules()）與結帳記錄規則使用次數（twshop_collect_applied_rule_ids()）
+ * 共用同一份判斷，確保「計次」跟「真的有折」一致。
+ */
+function twshop_get_cart_discount_fees( $cart ) {
     $rules = twshop_get_rules();
-    if ( empty($rules) ) return;
+    if ( empty($rules) ) return array();
     $user_roles = is_user_logged_in() ? wp_get_current_user()->roles : array('customer');
     $cart_total = $cart->get_subtotal();
+    $fees = array();
 
     // 疊加群組 B（cart 層）：cart_percent + cart_discount + tiered_cart 依卡片排序（優先權）逐一套用；
     // 遇到第一筆 stack_exclusive='yes' 的有效規則就只套用它、不再套用同群組其餘規則（跟群組 A 同一套邏輯）。
@@ -646,7 +670,7 @@ function twshop_apply_cart_discount_rules( $cart ) {
                 // 折扣後應付原價 90%，即折抵掉 10%）；修法前這裡誤算成 value=90 折抵掉 90%（只收10%），
                 // 跟商品層 percent 的算法方向剛好相反（v25.5.67 修正，見 CLAUDE.md）。
                 $discount_amount = ($rule['type'] === 'cart_percent') ? ($cart_total * ( 1 - floatval($rule['value']) / 100 )) : abs(floatval($rule['value']));
-                $cart->add_fee( esc_html($rule['name']), -1 * $discount_amount, true );
+                $fees[] = array( 'rule_id' => $rule['rule_id'], 'label' => esc_html( $rule['name'] ), 'amount' => $discount_amount );
                 if ( ( $rule['stack_exclusive'] ?? 'no' ) === 'yes' ) break;
             }
         } elseif ( $rule['type'] === 'tiered_cart' ) {
@@ -658,21 +682,24 @@ function twshop_apply_cart_discount_rules( $cart ) {
                         ? ( $cart_total * ( 1 - floatval( $tier['value'] ?? 0 ) / 100 ) )
                         : abs( floatval( $tier['value'] ?? 0 ) );
                     $fee_label = esc_html( $rule['name'] ) . '（滿 ' . wp_strip_all_tags( wc_price( floatval( $tier['min_amount'] ?? 0 ) ) ) . '）';
-                    $cart->add_fee( $fee_label, -1 * $discount_amount, true );
+                    $fees[] = array( 'rule_id' => $rule['rule_id'], 'label' => $fee_label, 'amount' => $discount_amount );
                     if ( ( $rule['stack_exclusive'] ?? 'no' ) === 'yes' ) break;
                 }
             }
         }
     }
+    return $fees;
 }
 
-function twshop_apply_free_shipping_rules( $rates, $package ) {
+/**
+ * 目前購物車第一條生效的免運規則（沒有則 null）。門檻以折扣後金額判斷：
+ * woocommerce_package_rates 觸發時，費用（含折扣負費用）已計算完畢，可直接讀取。
+ */
+function twshop_get_active_free_shipping_rule() {
     $rules = twshop_get_rules();
-    if ( empty($rules) ) return $rates;
+    if ( empty( $rules ) || ! WC()->cart ) return null;
     $user_roles = is_user_logged_in() ? wp_get_current_user()->roles : array('customer');
 
-    // 以折扣後金額作為門檻判斷基準：
-    // woocommerce_package_rates 觸發時，費用（含折扣負費用）已計算完畢，可直接讀取
     $subtotal        = WC()->cart->get_subtotal();
     $coupon_discount = WC()->cart->get_discount_total(); // WooCommerce 優惠券折扣（正數）
     $fee_discount    = 0;
@@ -684,25 +711,67 @@ function twshop_apply_free_shipping_rules( $rates, $package ) {
     }
     $cart_total = max( 0.0, $subtotal - $coupon_discount - $fee_discount );
 
-    $make_free = false; $free_rule_name = ''; $free_rule_methods = array();
-
     foreach ( $rules as $rule ) {
-        if ( $rule['type'] === 'free_shipping' ) {
-            if ( twshop_is_discount_rule_valid( $rule, $user_roles, $cart_total, 0 ) ) {
-                $make_free = true; $free_rule_name = $rule['name'];
-                $free_rule_methods = is_array( $rule['shipping_methods'] ?? null ) ? $rule['shipping_methods'] : array();
-                break;
-            }
+        if ( $rule['type'] === 'free_shipping' && twshop_is_discount_rule_valid( $rule, $user_roles, $cart_total, 0 ) ) {
+            return $rule;
         }
     }
-    if ( $make_free ) {
-        foreach ( $rates as $rate_id => $rate ) {
-            // 未指定適用運送方式（舊規則、或管理員刻意不勾選任何項目）時，視為全部運送方式皆免運，維持既有行為
-            if ( ! empty( $free_rule_methods ) && ! in_array( $rate_id, $free_rule_methods, true ) ) continue;
-            $rates[$rate_id]->cost = 0; $rates[$rate_id]->taxes = array();
-            $rates[$rate_id]->label = $rate->label . ' (' . $free_rule_name . ')';
-        }
+    return null;
+}
+
+function twshop_free_shipping_rule_methods( $rule ) {
+    return is_array( $rule['shipping_methods'] ?? null ) ? $rule['shipping_methods'] : array();
+}
+
+function twshop_apply_free_shipping_rules( $rates, $package ) {
+    $rule = twshop_get_active_free_shipping_rule();
+    if ( ! $rule ) return $rates;
+    $free_rule_methods = twshop_free_shipping_rule_methods( $rule );
+    foreach ( $rates as $rate_id => $rate ) {
+        // 未指定適用運送方式（舊規則、或管理員刻意不勾選任何項目）時，視為全部運送方式皆免運，維持既有行為
+        if ( ! empty( $free_rule_methods ) && ! in_array( $rate_id, $free_rule_methods, true ) ) continue;
+        $rates[$rate_id]->cost = 0; $rates[$rate_id]->taxes = array();
+        $rates[$rate_id]->label = $rate->label . ' (' . $rule['name'] . ')';
     }
     return $rates;
+}
+
+/**
+ * 結帳建立訂單當下，這張購物車「實際套用到」的折扣規則 ID（供規則使用次數計算）：
+ * 商品層折扣、購物車層折扣費用、生效且選用中的免運、購物車裡實際存在的贈品/買N送N/加購項目。
+ * 修正前是訂單成立後重算「規則是否有效」，沒套用到的規則也會被計次（v25.8.35）。
+ */
+function twshop_collect_applied_rule_ids( $cart ) {
+    $ids = array();
+    $user_roles = is_user_logged_in() ? wp_get_current_user()->roles : array('customer');
+
+    foreach ( $cart->get_cart() as $cart_item ) {
+        if ( isset( $cart_item['twshop_gift_rule_id'] ) )  { $ids[] = $cart_item['twshop_gift_rule_id']; continue; }
+        if ( isset( $cart_item['twshop_bxgy_rule_id'] ) )  { $ids[] = $cart_item['twshop_bxgy_rule_id']; continue; }
+        if ( isset( $cart_item['twshop_addon_rule_id'] ) ) { $ids[] = $cart_item['twshop_addon_rule_id']; continue; }
+        if ( isset( $cart_item['twshop_points_redeem_product_id'] ) ) continue;
+        $product = $cart_item['data'];
+        $base    = $product->get_price( 'edit' );
+        if ( '' === $base ) continue;
+        $ids = array_merge( $ids, twshop_calculate_product_discount( $base, $product, $user_roles )['rule_ids'] );
+    }
+
+    $ids = array_merge( $ids, wp_list_pluck( twshop_get_cart_discount_fees( $cart ), 'rule_id' ) );
+
+    $shipping_rule = twshop_get_active_free_shipping_rule();
+    if ( $shipping_rule ) {
+        $methods = twshop_free_shipping_rule_methods( $shipping_rule );
+        $chosen  = WC()->session ? (array) WC()->session->get( 'chosen_shipping_methods', array() ) : array();
+        if ( ! empty( $chosen ) && ( empty( $methods ) || array_intersect( $chosen, $methods ) ) ) {
+            $ids[] = $shipping_rule['rule_id'];
+        }
+    }
+
+    return array_values( array_unique( array_filter( $ids ) ) );
+}
+
+function twshop_store_applied_rule_ids_on_order( $order ) {
+    if ( ! WC()->cart ) return;
+    $order->update_meta_data( '_twshop_applied_rule_ids', twshop_collect_applied_rule_ids( WC()->cart ) );
 }
 

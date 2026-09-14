@@ -197,6 +197,7 @@ function twshop_membership_init() {
         add_filter( 'woocommerce_product_is_on_sale', 'twshop_product_is_on_sale', 99, 2 );
         add_action( 'woocommerce_cart_calculate_fees', 'twshop_apply_cart_discount_rules', 20, 1 );
         add_filter( 'woocommerce_package_rates', 'twshop_apply_free_shipping_rules', 100, 2 );
+        add_action( 'woocommerce_checkout_create_order', 'twshop_store_applied_rule_ids_on_order', 10, 1 );
         add_action( 'woocommerce_checkout_order_processed', 'twshop_increment_rule_usage_limits', 10, 3 );
         add_filter( 'woocommerce_coupon_is_valid', 'twshop_check_exclusive_coupons', 10, 2 );
         add_action( 'woocommerce_before_calculate_totals', 'twshop_auto_manage_gifts_and_addons', 10, 1 );
@@ -215,7 +216,9 @@ function twshop_membership_init() {
         add_action( 'wp_ajax_twshop_apply_points', 'twshop_ajax_apply_points' );
         add_action( 'wp_ajax_nopriv_twshop_apply_points', 'twshop_ajax_apply_points' );
         add_action( 'woocommerce_cart_calculate_fees', 'twshop_apply_points_discount_fee', 25, 1 );
+        add_action( 'woocommerce_checkout_create_order', 'twshop_store_points_cash_applied_on_order', 10, 1 );
         add_action( 'woocommerce_checkout_order_processed', 'twshop_deduct_points_on_checkout', 15, 3 );
+        add_action( 'woocommerce_cart_emptied', 'twshop_clear_applied_points_on_cart_emptied' );
         // 點數兌換商品
         add_action( 'wp_ajax_twshop_redeem_points_product', 'twshop_ajax_redeem_points_product' );
         add_action( 'wp_ajax_nopriv_twshop_redeem_points_product', 'twshop_ajax_redeem_points_product' );

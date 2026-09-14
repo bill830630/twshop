@@ -1287,26 +1287,58 @@ function twshop_apply_points_discount_fee( $cart ) {
     $cart->add_fee( twshop_points_term() . '折抵', -$discount_amount, false );
 }
 
+/**
+ * 建立訂單當下記下這張訂單實際用掉的現金折抵點數（此時 fee 已依餘額/上限算完，session 值即實際值）。
+ * 付款失敗後重新送出結帳時 WooCommerce 會重用同一張訂單，這個 hook 每次都會重新寫入。
+ */
+function twshop_store_points_cash_applied_on_order( $order ) {
+    $points = WC()->session ? (int) WC()->session->get( 'twshop_applied_points', 0 ) : 0;
+    $order->update_meta_data( '_twshop_points_cash_applied', max( 0, $points ) );
+}
+
+function twshop_clear_applied_points_on_cart_emptied() {
+    if ( WC()->session ) WC()->session->__unset( 'twshop_applied_points' );
+}
+
+/**
+ * 結帳扣點，**冪等**：付款失敗/從金流返回後重新送出，WooCommerce 會重用同一張 pending/failed 訂單並
+ * 再次觸發這個 hook。這裡以「這張訂單目前應扣總點數」對照「已淨扣點數」（已扣 − 已退還），只記差額；
+ * session 裡的現金折抵點數也不在這裡清掉（改在購物車清空時清），重送時折抵才不會消失（v25.8.35 修正：
+ * 原本每次觸發都全額再扣一次，且第二次沒有折抵卻已扣點）。
+ *
+ * 「用點數兌換商品」的兌換成本合併進同一筆 _twshop_points_redeemed meta，退款/取消的退還邏輯
+ * 讀同一個 meta，兩種來源一起被涵蓋。
+ */
 function twshop_deduct_points_on_checkout( $order_id, $posted_data, $order ) {
     $user_id = $order->get_customer_id();
     if ( ! $user_id ) return;
 
-    $applied_points = (int) ( WC()->session ? WC()->session->get( 'twshop_applied_points' ) : 0 );
-
-    // 「用點數兌換商品」的兌換成本合併進同一筆扣點紀錄與 _twshop_points_redeemed meta，
-    // 現有的退款/取消訂單退還邏輯（twshop_refund_points_on_order_cancel()）本來就是讀這個
-    // meta 全額退還，兩種來源的點數扣除自動一起被涵蓋，不需要另外寫一套退還邏輯。
+    $cash_points = (int) $order->get_meta( '_twshop_points_cash_applied' );
     $redeem_points_total = 0;
     foreach ( $order->get_items() as $item ) {
         $redeem_points_total += (int) $item->get_meta( '_twshop_points_redeem_cost' );
     }
+    $target = $cash_points + $redeem_points_total;
 
-    $total_deduct = $applied_points + $redeem_points_total;
-    if ( $total_deduct <= 0 ) return;
+    $recorded = (int) get_post_meta( $order_id, '_twshop_points_redeemed', true );
+    $refunded = get_post_meta( $order_id, '_twshop_points_redeemed_refunded', true )
+        ? $recorded
+        : min( $recorded, (int) get_post_meta( $order_id, '_twshop_points_redeemed_refunded_amount', true ) );
+    $net_deducted = $recorded - $refunded;
 
-    twshop_add_points_log( $user_id, -$total_deduct, '訂單 #' . $order_id . ' ' . twshop_points_term() . ( $redeem_points_total > 0 ? '折抵/兌換商品' : '折抵' ) );
-    if ( $applied_points > 0 && WC()->session ) WC()->session->__unset( 'twshop_applied_points' );
-    update_post_meta( $order_id, '_twshop_points_redeemed', $total_deduct );
+    if ( $target <= 0 && $recorded <= 0 ) return;
+
+    $delta = $target - $net_deducted;
+    if ( 0 !== $delta ) {
+        $label = $delta > 0
+            ? ( '訂單 #' . $order_id . ' ' . twshop_points_term() . ( $redeem_points_total > 0 ? '折抵/兌換商品' : '折抵' ) )
+            : ( '訂單 #' . $order_id . ' 重新結帳，' . twshop_points_term() . '差額退還' );
+        twshop_add_points_log( $user_id, -$delta, $label );
+    }
+
+    update_post_meta( $order_id, '_twshop_points_redeemed', $target );
+    delete_post_meta( $order_id, '_twshop_points_redeemed_refunded' );
+    delete_post_meta( $order_id, '_twshop_points_redeemed_refunded_amount' );
 }
 
 /**
