@@ -144,12 +144,15 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                 <span class="drag-handle" style="cursor:move; color:#999;" title="拖曳排序"><?php echo twshop_get_account_tab_icon_svg( 'grip-vertical' ); ?></span>
                 <span class="twshop-rule-priority" title="優先順序：越前面越先套用"></span>
                 <span class="rule-title-display"><?php echo $name ? esc_html($name) : '新規則'; ?></span>
-                <span class="twshop-badge twshop-badge--warn twshop-rule-disabled-badge" style="display:<?php echo $enabled === 'no' ? 'inline-block' : 'none'; ?>;">已停用</span>
                 <span class="twshop-badge twshop-badge--warn twshop-rule-dirty-badge" style="display:none;">未儲存</span>
             </span>
             <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
                 <span class="twshop-rule-status" aria-live="polite"></span>
-                <label style="font-size:12px; font-weight:normal;"><input type="checkbox" class="twshop-rule-enabled-toggle" name="enabled" value="yes" <?php checked( $enabled, 'yes' ); ?> /> 啟用</label>
+                <label class="twshop-switch" title="切換後立即生效">
+                    <input type="checkbox" class="twshop-rule-enabled-toggle" name="enabled" value="yes" <?php checked( $enabled, 'yes' ); ?> />
+                    <span class="twshop-switch-slider" aria-hidden="true"></span>
+                    <span class="twshop-switch-text"><?php echo $enabled === 'no' ? '停用' : '啟用'; ?></span>
+                </label>
                 <button type="submit" class="button button-primary save-rule-btn">儲存</button>
                 <span class="twshop-card-toggle-icon" title="點擊收合或展開"><?php echo twshop_get_account_tab_icon_svg( 'chevron-down' ); ?></span>
             </div>

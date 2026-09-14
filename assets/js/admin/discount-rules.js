@@ -23,10 +23,6 @@ jQuery(document).ready(function($) {
     }
     function showCardStatus($card, type, msg) { showStatus($card.find('.twshop-card-header .twshop-rule-status'), type, msg); }
     function showToolbarStatus(type, msg) { showStatus($('#twshop-rule-toolbar-status'), type, msg); }
-    function nowHM() {
-        var d = new Date();
-        return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-    }
     function ajaxErrorMsg(res, fallback) { return (res && res.data && res.data.msg) || fallback; }
 
     // ── 未儲存標記 ───────────────────────────────────────────
@@ -157,7 +153,7 @@ jQuery(document).ready(function($) {
 
     function applyEnabledLook($card, isEnabled) {
         $card.toggleClass('twshop-rule-disabled', !isEnabled);
-        $card.find('.twshop-rule-disabled-badge').toggle(!isEnabled);
+        $card.find('.twshop-switch-text').text(isEnabled ? '啟用' : '停用');
         $card.attr('data-rule-enabled', isEnabled ? 'yes' : 'no');
     }
 
@@ -176,7 +172,7 @@ jQuery(document).ready(function($) {
         $.post(twshopDiscountRules.ajaxUrl, { action: 'twshop_batch_update_rules', action_type: isEnabled ? 'enable' : 'disable', rule_ids: [ruleId], twshop_nonce: twshopAdminNonce })
             .done(function(res) {
                 if (res && res.success) {
-                    showCardStatus($card, 'success', '✓ 已' + (isEnabled ? '啟用' : '停用') + ' ' + nowHM());
+                    showCardStatus($card, 'success', '✓ 已' + (isEnabled ? '啟用' : '停用'));
                 } else {
                     $toggle.prop('checked', !isEnabled);
                     applyEnabledLook($card, !isEnabled);
@@ -219,7 +215,7 @@ jQuery(document).ready(function($) {
             if (!order.length) return;
             $.post(twshopDiscountRules.ajaxUrl, { action: 'twshop_reorder_rules', order: order, twshop_nonce: twshopAdminNonce })
                 .done(function(res) {
-                    if (res && res.success) showToolbarStatus('success', '✓ 優先順序已儲存 ' + nowHM());
+                    if (res && res.success) showToolbarStatus('success', '✓ 優先順序已儲存');
                     else showToolbarStatus('error', ajaxErrorMsg(res, '排序儲存失敗，請重新整理頁面後再試'));
                 })
                 .fail(function() { showToolbarStatus('error', '排序儲存失敗，請檢查網路連線後重試'); });
@@ -259,7 +255,7 @@ jQuery(document).ready(function($) {
                     $form.attr('data-rule-name', name).attr('data-rule-type', $form.find('select[name="type"]').val());
                     $form.find('.twshop-duplicate-rule').prop('disabled', false).attr('title', '複製一份（預設停用）');
                     setDirty($form, false);
-                    showCardStatus($form, 'success', '✓ 已儲存 ' + nowHM());
+                    showCardStatus($form, 'success', '✓ 已儲存');
                 } else {
                     showCardStatus($form, 'error', ajaxErrorMsg(res, '儲存失敗'));
                 }

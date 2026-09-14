@@ -251,3 +251,13 @@ input:checked + .twshop-slider:before { transform:translateX(20px); }
 .twshop-rule-status.is-error{ color:#b32d2e; }
 .twshop-rule-card.is-dirty{ border-color:#dba617 !important; }
 .twshop-rule-card.is-dirty .save-rule-btn{ box-shadow:0 0 0 2px #f0c33c; }
+/* 規則啟用切換鈕（v25.8.40）：底層仍是 name="enabled" 的 checkbox，只改外觀 */
+.twshop-switch{ position:relative; display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; font-weight:normal; user-select:none; }
+.twshop-switch input{ position:absolute; opacity:0; width:1px; height:1px; margin:0; }
+.twshop-switch-slider{ position:relative; width:36px; height:20px; border-radius:20px; background:#c3c4c7; transition:background .2s; flex-shrink:0; }
+.twshop-switch-slider::after{ content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.2); transition:transform .2s; }
+.twshop-switch input:checked + .twshop-switch-slider{ background:#2271b1; }
+.twshop-switch input:checked + .twshop-switch-slider::after{ transform:translateX(16px); }
+.twshop-switch input:focus-visible + .twshop-switch-slider{ box-shadow:0 0 0 2px #fff, 0 0 0 4px #2271b1; }
+.twshop-switch input:disabled + .twshop-switch-slider{ opacity:.6; cursor:wait; }
+.twshop-switch-text{ min-width:2em; }
