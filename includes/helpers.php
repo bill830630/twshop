@@ -372,6 +372,30 @@ function twshop_restrict_purchase_for_redeem_and_gift_products( $purchasable, $p
 }
 
 /**
+ * 掛 woocommerce_cart_item_is_purchasable（注意跟上面的 woocommerce_is_purchasable 是
+ * 兩支不同的 filter）：WC_Cart_Session::get_cart_from_session() 在「每一次」頁面載入、
+ * 從 session 還原購物車內容時，都會對購物車裡已存在的每個項目重新檢查一次 is_purchasable()，
+ * 不通過就直接把該項目從購物車移除，並顯示「已從您的購物車移除」的提示。
+ *
+ * twshop_bypass_purchase_restriction() 這個旗標只在 add_to_cart() 呼叫的當下短暫生效，
+ * 涵蓋不到「之後的頁面載入」這個時間點，所以兌換商品/贈品成功加入購物車後，下一次
+ * 頁面載入就會被這支 session 還原邏輯擋下來、悄悄消失（v25.8.30 上線後才發現的迴歸）。
+ *
+ * 修法不是延長旗標時效，而是直接看這個 filter 唯一能拿到的、購物車項目自己的 meta
+ * （$values，也就是 add_to_cart() 當初傳入的 $cart_item_data，已知一定包含
+ * twshop_points_redeem_product_id 或 twshop_gift_rule_id 其中之一）：只要這兩個 key
+ * 有一個存在，就代表這是 twshop 自己合法加進去的項目，直接放行，不受限制清單影響——
+ * 不需要旗標，因為每次頁面載入這個 filter 都會拿到當下持久化的真實項目資料，判斷永遠準確。
+ */
+function twshop_allow_purchasable_for_tracked_cart_items( $purchasable, $key, $values ) {
+    if ( $purchasable ) return $purchasable;
+    if ( ! empty( $values['twshop_points_redeem_product_id'] ) || ! empty( $values['twshop_gift_rule_id'] ) ) {
+        return true;
+    }
+    return $purchasable;
+}
+
+/**
  * 商品詳情頁的說明文字：is_purchasable() 為 false 時，simple.php 樣板完全不輸出加入購物車
  * 表單（連庫存資訊都不顯示），沒有這行說明的話頁面看起來會像空白/壞掉，顧客不知道為什麼
  * 不能買。掛在價格（priority 10）之後、加入購物車表單（priority 30）之前。兌換商品／贈品

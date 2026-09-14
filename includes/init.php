@@ -71,6 +71,14 @@ function twshop_membership_init() {
     add_filter( 'woocommerce_is_purchasable', 'twshop_restrict_purchase_for_redeem_and_gift_products', 10, 2 );
     add_action( 'woocommerce_single_product_summary', 'twshop_render_purchase_restricted_notice', 25 );
 
+    // 上面那支 filter 擋掉的是「一般顧客直接購買」，但 WC_Cart_Session::get_cart_from_session()
+    // 在每次頁面載入從 session 還原購物車時，會透過另一支 filter（注意 hook 名稱不同：
+    // woocommerce_cart_item_is_purchasable）對購物車裡「已經存在」的項目重新檢查一次
+    // is_purchasable()，不通過就悄悄移除並顯示「已從您的購物車移除」——這會把 twshop 自己
+    // 合法加入的兌換商品/贈品在下一次頁面載入時一併清掉。這支 filter 直接看購物車項目自己的
+    // meta（twshop_points_redeem_product_id／twshop_gift_rule_id）放行，見 helpers.php 說明。
+    add_filter( 'woocommerce_cart_item_is_purchasable', 'twshop_allow_purchasable_for_tracked_cart_items', 10, 3 );
+
     // --- 後台選單 ---
     add_action( 'admin_menu', 'twshop_register_menus' );
     add_action( 'wp_dashboard_setup', 'twshop_register_dashboard_widget' );
