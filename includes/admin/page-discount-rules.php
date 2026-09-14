@@ -153,7 +153,6 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                     <span class="twshop-switch-slider" aria-hidden="true"></span>
                     <span class="twshop-switch-text"><?php echo $enabled === 'no' ? '停用' : '啟用'; ?></span>
                 </label>
-                <button type="submit" class="button button-primary save-rule-btn">儲存</button>
                 <span class="twshop-card-toggle-icon" title="點擊收合或展開"><?php echo twshop_get_account_tab_icon_svg( 'chevron-down' ); ?></span>
             </div>
         </div>
@@ -294,9 +293,15 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                 </div>
             </div>
 
-            <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-                <button type="button" class="button twshop-duplicate-rule" <?php disabled( '' === $r_id ); ?> title="<?php echo '' === $r_id ? '請先儲存規則' : '複製一份（預設停用）'; ?>">複製規則</button>
-                <button type="button" class="button remove-rule-row" style="color:#b32d2e; border-color:#b32d2e;">刪除規則</button>
+            <div class="twshop-rule-footer" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; padding-top:15px; border-top:1px solid #eee;">
+                <span style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button type="button" class="button twshop-duplicate-rule" <?php disabled( '' === $r_id ); ?> title="<?php echo '' === $r_id ? '請先儲存規則' : '複製一份（預設停用）'; ?>">複製規則</button>
+                    <button type="button" class="button remove-rule-row" style="color:#b32d2e; border-color:#b32d2e;">刪除規則</button>
+                </span>
+                <span style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <span class="twshop-rule-status twshop-rule-footer-status" aria-live="polite"></span>
+                    <button type="submit" class="button button-primary save-rule-btn">儲存規則</button>
+                </span>
             </div>
         </div>
     </form>

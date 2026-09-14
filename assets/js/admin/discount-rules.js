@@ -22,6 +22,11 @@ jQuery(document).ready(function($) {
         }
     }
     function showCardStatus($card, type, msg) { showStatus($card.find('.twshop-card-header .twshop-rule-status'), type, msg); }
+    // 儲存按鈕在卡片最下方，儲存結果顯示在按鈕旁邊（卡片收合時看不到，所以另外同步到標題列）
+    function showSaveStatus($card, type, msg) {
+        showStatus($card.find('.twshop-rule-footer-status'), type, msg);
+        showCardStatus($card, type, msg);
+    }
     function showToolbarStatus(type, msg) { showStatus($('#twshop-rule-toolbar-status'), type, msg); }
     function ajaxErrorMsg(res, fallback) { return (res && res.data && res.data.msg) || fallback; }
 
@@ -255,13 +260,13 @@ jQuery(document).ready(function($) {
                     $form.attr('data-rule-name', name).attr('data-rule-type', $form.find('select[name="type"]').val());
                     $form.find('.twshop-duplicate-rule').prop('disabled', false).attr('title', '複製一份（預設停用）');
                     setDirty($form, false);
-                    showCardStatus($form, 'success', '✓ 已儲存');
+                    showSaveStatus($form, 'success', '✓ 已儲存');
                 } else {
-                    showCardStatus($form, 'error', ajaxErrorMsg(res, '儲存失敗'));
+                    showSaveStatus($form, 'error', ajaxErrorMsg(res, '儲存失敗'));
                 }
             })
-            .fail(function() { showCardStatus($form, 'error', '儲存失敗，請檢查網路連線後重試'); })
-            .always(function() { $btn.text('儲存').prop('disabled', false); });
+            .fail(function() { showSaveStatus($form, 'error', '儲存失敗，請檢查網路連線後重試'); })
+            .always(function() { $btn.text('儲存規則').prop('disabled', false); });
     });
 
     // ── 複製 ─────────────────────────────────────────────────
