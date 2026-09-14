@@ -268,9 +268,25 @@ jQuery(document).ready(function($) {
     });
 
     // ── 儲存 ─────────────────────────────────────────────────
+    // 表單設了 novalidate（見 twshop_get_rule_row_html()），只檢查目前看得到、真的會用到的欄位
+    function validateRuleForm($form) {
+        var $name = $form.find('.twshop-rule-name-input');
+        if (!$.trim($name.val())) { $name.trigger('focus'); return '請輸入規則名稱'; }
+        if ($form.find('.twshop-coupon-toggle').is(':checked')) {
+            var code = $.trim($form.find('input[name="c_code"]').val());
+            if (code && !/^[A-Za-z0-9_-]+$/.test(code)) {
+                openAndScrollTo($form, 'input[name="c_code"]');
+                return '領取用代碼只能使用英文、數字、- 或 _';
+            }
+        }
+        return '';
+    }
+
     $container.on('submit', '.twshop-rule-form', function(e) {
         e.preventDefault();
         var $form = $(this), $btn = $form.find('.save-rule-btn');
+        var invalidMsg = validateRuleForm($form);
+        if (invalidMsg) { showSaveStatus($form, 'error', invalidMsg); return; }
         $btn.text('儲存中…').prop('disabled', true);
         $.post(twshopDiscountRules.ajaxUrl, $form.serialize() + '&action=twshop_save_rule')
             .done(function(res) {

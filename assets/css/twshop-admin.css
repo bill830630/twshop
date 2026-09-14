@@ -270,5 +270,5 @@ input:checked + .twshop-slider:before { transform:translateX(20px); }
 .twshop-card-header-controls{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; font-size:12px; }
 .twshop-rule-schedule{ display:flex; flex-wrap:nowrap; align-items:center; gap:6px 10px; }
 .twshop-rule-schedule label{ font-weight:normal; display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
-.twshop-rule-schedule input{ width:125px; }
+.twshop-rule-schedule input{ width:150px; }
 #twshop-rule-toolbar-status{ margin:0; }
