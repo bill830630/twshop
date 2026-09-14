@@ -16,6 +16,9 @@
 #                                             （客戶序號清單）打包出去
 #   - CLAUDE.md / 任何 *.md                    內部開發文件，含商業邏輯與踩坑細節
 #   - build.sh                                打包腳本本身不需要隨安裝包分發
+#   - update-config.json / release.sh /       自架更新通道（見 CLAUDE.md「自架更新通道」一節）
+#     add-github-token.sh                     的內部工具，只給本機發版流程與 GitHub API 用，
+#                                             不該出現在裝到客戶站的安裝包裡
 #
 # 【為什麼打包後一定要驗證，而不是打包完就結束】
 # exclude 清單只是「打包指令當下」的防呆，未來這支腳本被複製/修改、或 zip 指令本身
@@ -64,12 +67,15 @@ zip -r -q "$OUTPUT_ZIP" "$PLUGIN_DIR_NAME" \
     --exclude "$PLUGIN_DIR_NAME/*.md" \
     --exclude "$PLUGIN_DIR_NAME/build.sh" \
     --exclude "$PLUGIN_DIR_NAME/.gitignore" \
-    --exclude "$PLUGIN_DIR_NAME/.dev-tools/*"
+    --exclude "$PLUGIN_DIR_NAME/.dev-tools/*" \
+    --exclude "$PLUGIN_DIR_NAME/update-config.json" \
+    --exclude "$PLUGIN_DIR_NAME/release.sh" \
+    --exclude "$PLUGIN_DIR_NAME/add-github-token.sh"
 
 # --- 打包後強制驗證：確認關鍵不該存在的內容真的沒有打包進去 -------------------------
 # 任何一個關鍵字出現在 zip 內容清單裡，都代表 exclude 清單失效，必須視為打包失敗、
 # 刪除產出的 zip（避免留下一個有問題的檔案被誤用/誤傳給客戶），並用非 0 狀態碼結束。
-BAD_KEYWORDS=("license-server" "CLAUDE.md" "\.git/" "\.gitignore" "\.dev-tools" "\.DS_Store")
+BAD_KEYWORDS=("license-server" "CLAUDE.md" "\.git/" "\.gitignore" "\.dev-tools" "\.DS_Store" "update-config\.json" "release\.sh" "add-github-token\.sh")
 
 ZIP_LISTING="$(unzip -l "$OUTPUT_ZIP")"
 

@@ -10,3 +10,4 @@ license-server/
 CLAUDE.md
 .dev-tools/
 release.sh
+add-github-token.sh

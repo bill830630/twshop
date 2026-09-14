@@ -58,6 +58,10 @@ function twshop_woocommerce_missing_notice() {
 function twshop_membership_init() {
     if ( ! class_exists( 'WooCommerce' ) ) return;
 
+    // 自架更新通道（比照 ultimate-login 的 WCLON_Updater 掛法：緊接在 WooCommerce 存在
+    // 判斷之後），見 includes/class-twshop-updater.php。
+    TWSHOP_Updater::init();
+
     // --- 後台選單 ---
     add_action( 'admin_menu', 'twshop_register_menus' );
     add_action( 'wp_dashboard_setup', 'twshop_register_dashboard_widget' );
