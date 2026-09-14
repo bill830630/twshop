@@ -121,7 +121,7 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                     <span class="twshop-switch-text"><?php echo $enabled === 'no' ? '停用' : '啟用'; ?></span>
                 </label>
             </span>
-            <input type="text" name="name" class="twshop-rule-name-input" value="<?php echo esc_attr( $name ); ?>" placeholder="規則名稱（必填）" aria-label="規則名稱" required />
+            <input type="text" name="name" class="twshop-rule-name-input" value="<?php echo esc_attr( $name ); ?>" placeholder="規則名稱（依設定自動產生）" aria-label="規則名稱" title="依下方設定自動產生，可直接修改；修改後不再自動更新，清空即恢復自動命名" required />
             <span class="twshop-badge twshop-badge--warn twshop-rule-dirty-badge" style="display:none;">未儲存</span>
             <span class="twshop-card-header-controls" title="選好或清除後立即生效">
                 <span class="twshop-rule-schedule">

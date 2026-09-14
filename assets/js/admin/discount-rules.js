@@ -124,6 +124,99 @@ jQuery(document).ready(function($) {
         $card.find('.twshop-rule-logic-wrap').toggle(hasScope && hasMin);
     }
 
+    // ── 規則名稱自動產生 ─────────────────────────────────────
+    // 名稱依卡片設定即時產生；使用者手動改過就不再覆蓋（nameAuto=false），清空名稱即恢復自動。
+    function selectedTexts($select) {
+        return $select.find('option:selected').map(function() {
+            if (!$(this).val()) return null;
+            // WooCommerce 商品搜尋回傳的文字是「名稱 (SKU)」或「名稱 (#ID)」，只取名稱
+            return $.trim($(this).text()).replace(/\s*\([^()]*\)$/, '');
+        }).get().filter(Boolean);
+    }
+    function joinNames(names) {
+        if (!names.length) return '';
+        return names.length > 2 ? names.slice(0, 2).join('、') + ' 等' + names.length + '項' : names.join('、');
+    }
+    function fmtNum(raw) {
+        var n = parseFloat(raw);
+        return isNaN(n) ? '' : String(Math.round(n * 100) / 100);
+    }
+    function zheText(raw) {
+        var v = parseFloat(raw);
+        if (isNaN(v) || v <= 0 || v >= 100) return '';
+        return String((v % 10 === 0 || v < 10) ? v / 10 : v);
+    }
+
+    function generateRuleName($card) {
+        var type = $card.find('.twshop-rule-type').val();
+        var value = $card.find('.twshop-rule-value').val();
+        var min = parseFloat($card.find('.twshop-rule-min-amount').val()) || 0;
+        var scopeType = $card.find('.twshop-condition-type').val();
+        var scope = '';
+        if (scopeType === 'product') scope = joinNames(selectedTexts($card.find('select[name="condition_values_product[]"]')));
+        if (scopeType === 'category') scope = joinNames(selectedTexts($card.find('select[name="condition_values_category[]"]')));
+        if (scopeType === 'tag') scope = joinNames(selectedTexts($card.find('select[name="condition_values_tag[]"]')));
+        var gift = selectedTexts($card.find('select[name="gift_product_id"]'))[0] || '';
+        var $role = $card.find('select[name="role"]');
+        var role = $role.val() !== 'all' ? $.trim($role.find('option:selected').text()) : '';
+        var zhe = zheText(value);
+        var amount = fmtNum(value);
+
+        var core;
+        switch (type) {
+            case 'percent':       core = (scope || '全館商品') + (zhe ? ' 打' + zhe + '折' : ' 打折'); break;
+            case 'fixed_product': core = (scope || '全館商品') + ' 每件折' + (amount ? amount + '元' : '抵'); break;
+            case 'cart_percent':  core = '全單' + (zhe ? '打' + zhe + '折' : '打折'); break;
+            case 'cart_discount': core = '全單折' + (amount ? amount + '元' : '抵'); break;
+            case 'free_shipping': core = '免運'; break;
+            case 'free_gift':     core = gift ? '送「' + gift + '」' : '贈品'; break;
+            case 'addon_product': core = gift ? '加購「' + gift + '」' + (amount ? amount + '元' : '') : '加購優惠'; break;
+            case 'buy_x_get_y':
+                var n = $card.find('input[name="buy_qty"]').val(), m = $card.find('input[name="free_qty"]').val();
+                core = (scope ? scope + ' ' : '') + '買' + (parseInt(n, 10) > 0 ? n : 'N') + '送' + (parseInt(m, 10) > 0 ? m : 'M');
+                break;
+            case 'tiered_cart':
+                var mins = $card.find('input[name="tiers_min[]"]').map(function() { return parseFloat($(this).val()); }).get()
+                    .filter(function(x) { return x > 0; }).sort(function(a, b) { return a - b; });
+                core = mins.length ? '階梯折扣（滿' + fmtNum(mins[0]) + '起）' : '階梯折扣';
+                break;
+            default: core = '折扣規則';
+        }
+
+        var parts = [];
+        if (role) parts.push('【' + role + '】');
+        // 購物車層規則的範圍語意是「購物車含有」（商品層與買N送N 已經寫在 core 裡）
+        if (scope && ['cart_percent', 'cart_discount', 'free_shipping', 'free_gift', 'addon_product'].indexOf(type) !== -1) parts.push('含' + scope);
+        if (min > 0 && type !== 'tiered_cart') parts.push('滿' + fmtNum(min));
+        parts.push(core);
+        return parts.join(' ');
+    }
+
+    function refreshAutoName($card) {
+        if (!$card.data('nameAuto')) return;
+        var name = generateRuleName($card);
+        var $input = $card.find('.twshop-rule-name-input');
+        if ($input.val() === name) return;
+        $input.val(name);
+        $card.attr('data-rule-name', name);
+        if (dirtyTrackingOn) setDirty($card, true);
+    }
+
+    $container.on('input', '.twshop-rule-name-input', function() {
+        $(this).closest('.twshop-rule-form').data('nameAuto', $.trim($(this).val()) === '');
+    });
+    $container.on('blur', '.twshop-rule-name-input', function() {
+        refreshAutoName($(this).closest('.twshop-rule-form'));
+    });
+    $container.on('input change', '.twshop-card-body :input', function() {
+        refreshAutoName($(this).closest('.twshop-rule-form'));
+    });
+    // 分類/標籤方塊移除、階梯列增減不會觸發 input 事件，等 DOM 更新完再重算
+    $container.on('click', '.twshop-chip-remove, .twshop-add-tier-row, .twshop-remove-tier-row', function() {
+        var $card = $(this).closest('.twshop-rule-form');
+        setTimeout(function() { refreshAutoName($card); }, 0);
+    });
+
     // ── 初始化 ───────────────────────────────────────────────
     function initCards($cards) {
         $cards.find('.twshop-datetime-picker').each(function() {
@@ -135,6 +228,9 @@ jQuery(document).ready(function($) {
             var $card = $(this);
             applyTypeLayout($card);
             rememberSavedSchedule($card);
+            var currentName = $.trim($card.find('.twshop-rule-name-input').val());
+            $card.data('nameAuto', currentName === '' || currentName === generateRuleName($card));
+            refreshAutoName($card);
             $card.find('.twshop-tier-row').each(function() { updateTierHint($(this)); });
         });
     }
