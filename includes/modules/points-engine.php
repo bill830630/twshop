@@ -1051,9 +1051,18 @@ function twshop_get_points_discount_amount( $applied_points ) {
 
     $discount_amount = floor( $applied_points / $redemption_rate );
 
-    $max_percent   = (float) get_option( 'wc_points_max_percent', 30 );
+    $max_percent   = min( 100, (float) get_option( 'wc_points_max_percent', 30 ) );
     $cart_subtotal = WC()->cart->get_subtotal() + WC()->cart->get_subtotal_tax();
     $max_discount  = $cart_subtotal * ( $max_percent / 100 );
+
+    // 上限另外不能超過「扣掉優惠券與其他折扣後實際還要付的商品金額」：WooCommerce 會把負費用夾到
+    // 總額不低於 0，超出的部分沒有真的折到錢，點數卻照扣（v25.8.36 修正）。點數費用在 priority 25，
+    // 此時優惠券與 twshop 購物車層折扣（priority 20）都已經算好。
+    $payable = $cart_subtotal - WC()->cart->get_discount_total() - WC()->cart->get_discount_tax();
+    foreach ( WC()->cart->get_fees() as $fee ) {
+        if ( $fee->amount < 0 && $fee->name !== twshop_points_term() . '折抵' ) $payable += (float) $fee->amount;
+    }
+    $max_discount = max( 0, min( $max_discount, floor( $payable ) ) );
 
     if ( $discount_amount > $max_discount ) {
         $discount_amount = $max_discount;

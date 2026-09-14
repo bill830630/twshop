@@ -184,25 +184,23 @@ function twshop_render_cart_addons() {
     $rules      = twshop_get_rules();
     $user_roles = is_user_logged_in() ? wp_get_current_user()->roles : array( 'customer' );
 
-    $cart_total    = 0;
-    $items_in_cart = array();
+    $cart_total      = twshop_get_cart_threshold_total( WC()->cart );
+    $addon_rules_in_cart = array();
     foreach ( WC()->cart->get_cart() as $cart_item ) {
-        if ( ! isset( $cart_item['twshop_gift_rule_id'] ) ) {
-            $item_price  = isset( $cart_item['line_subtotal'] ) ? $cart_item['line_subtotal'] : ( $cart_item['data']->get_price() * $cart_item['quantity'] );
-            $cart_total += $item_price;
-        }
-        $items_in_cart[] = $cart_item['product_id'];
+        if ( isset( $cart_item['twshop_addon_rule_id'] ) ) $addon_rules_in_cart[] = $cart_item['twshop_addon_rule_id'];
     }
 
     $available_addons = array();
     foreach ( $rules as $rule ) {
         if ( $rule['type'] === 'addon_product' && ! empty( $rule['gift_product_id'] ) ) {
             $addon_id = (int) $rule['gift_product_id'];
+            if ( isset( $available_addons[ $addon_id ] ) ) continue; // 同一商品多條加購規則，取排序最前面那條
             if ( twshop_is_discount_rule_valid( $rule, $user_roles, $cart_total, 0 ) ) {
-                $available_addons[] = array(
+                $available_addons[ $addon_id ] = array(
                     'product_id' => $addon_id,
+                    'rule_id'    => $rule['rule_id'],
                     'price'      => floatval( $rule['value'] ),
-                    'in_cart'    => in_array( $addon_id, $items_in_cart ),
+                    'in_cart'    => in_array( $rule['rule_id'], $addon_rules_in_cart, true ),
                 );
             }
         }
@@ -211,10 +209,7 @@ function twshop_render_cart_addons() {
     echo '<div class="twshop-cart-addons-wrapper">';
     if ( ! empty( $available_addons ) ) {
         // 建立以 product_id 為 key 的查詢 map
-        $addon_map = array();
-        foreach ( $available_addons as $addon ) {
-            $addon_map[ $addon['product_id'] ] = $addon;
-        }
+        $addon_map = $available_addons;
 
         // 用 WP_Query 建立真正的 loop，確保主題所有 hooks（Blocksy ct-media-container 等）正確觸發
         $addon_query = new WP_Query( array(
@@ -259,7 +254,8 @@ function twshop_render_cart_addons() {
                 // 覆蓋按鈕：換成後台設定的文字（預設「加入加購」/「已在購物車」）
                 $btn_add_text    = twshop_option( 'wc_addon_btn_add_text' );
                 $btn_incart_text = twshop_option( 'wc_addon_btn_incart_text' );
-                $button_filter = function( $html, $prod, $args ) use ( $pid, $in_cart, $btn_add_text, $btn_incart_text ) {
+                $addon_rule_id = $addon['rule_id'];
+                $button_filter = function( $html, $prod, $args ) use ( $pid, $in_cart, $btn_add_text, $btn_incart_text, $addon_rule_id ) {
                     if ( (int) $prod->get_id() !== $pid ) return $html;
                     if ( $in_cart ) {
                         return sprintf(
@@ -268,10 +264,12 @@ function twshop_render_cart_addons() {
                             esc_html( $btn_incart_text )
                         );
                     }
+                    // data-twshop_addon 會被 WooCommerce add-to-cart.js 一起 POST，由 twshop_mark_addon_cart_item() 標記成加購項目。
                     return sprintf(
-                        '<a href="%s" data-quantity="1" data-product_id="%d" class="button product_type_simple add_to_cart_button ajax_add_to_cart">%s</a>',
-                        esc_url( wc_get_cart_url() . '?add-to-cart=' . $pid ),
+                        '<a href="%s" data-quantity="1" data-product_id="%d" data-twshop_addon="%s" class="button product_type_simple add_to_cart_button ajax_add_to_cart">%s</a>',
+                        esc_url( add_query_arg( array( 'add-to-cart' => $pid, 'twshop_addon' => $addon_rule_id ), wc_get_cart_url() ) ),
                         esc_attr( $pid ),
+                        esc_attr( $addon_rule_id ),
                         esc_html( $btn_add_text )
                     );
                 };
@@ -310,11 +308,19 @@ function twshop_ajax_remove_addon() {
     if ( ! $product_id || ! WC()->cart ) {
         wp_send_json_error( array( 'message' => '發生錯誤' ) );
     }
+    // 優先移除加購項目／點數兌換項目，找不到才退回移除同商品的一般項目（相容改版前加入、沒有標記的舊加購項目）。
+    $fallback_key = null;
     foreach ( WC()->cart->get_cart() as $key => $item ) {
-        if ( (int) $item['product_id'] === $product_id && ! isset( $item['twshop_gift_rule_id'] ) ) {
+        if ( (int) $item['product_id'] !== $product_id || isset( $item['twshop_gift_rule_id'] ) || isset( $item['twshop_bxgy_rule_id'] ) ) continue;
+        if ( isset( $item['twshop_addon_rule_id'] ) || isset( $item['twshop_points_redeem_product_id'] ) ) {
             WC()->cart->remove_cart_item( $key );
             wp_send_json_success( array( 'message' => '已移除' ) );
         }
+        if ( null === $fallback_key ) $fallback_key = $key;
+    }
+    if ( null !== $fallback_key ) {
+        WC()->cart->remove_cart_item( $fallback_key );
+        wp_send_json_success( array( 'message' => '已移除' ) );
     }
     wp_send_json_error( array( 'message' => '商品不在購物車中' ) );
 }

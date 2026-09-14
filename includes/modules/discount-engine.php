@@ -209,6 +209,53 @@ function twshop_bxgy_item_matches_rule( $cart_item, $rule ) {
     return false;
 }
 
+/**
+ * 贈品/加購門檻用的商品小計（不含贈品、不含稅）。直接用商品目前售價計算，不讀 line_subtotal：
+ * woocommerce_before_calculate_totals 觸發時 line_subtotal 還是上一輪的值，新加入的商品是 0，
+ * 贈品增減會晚一次計算才反映（v25.8.36 修正）。
+ */
+function twshop_get_cart_threshold_total( $cart_obj ) {
+    $total = 0;
+    foreach ( $cart_obj->get_cart() as $cart_item ) {
+        if ( isset( $cart_item['twshop_gift_rule_id'] ) || empty( $cart_item['data'] ) ) continue;
+        $total += (float) wc_get_price_excluding_tax( $cart_item['data'], array( 'qty' => (int) $cart_item['quantity'] ) );
+    }
+    return $total;
+}
+
+/**
+ * 從購物車「加購」區塊加入時（按鈕帶 twshop_addon=<rule_id>），把加購規則 ID 寫進購物車項目，
+ * 之後只有這一行會套用加購價並鎖定 1 件（v25.8.36）。規則不存在/不是加購型別/商品對不上/目前不符資格時不標記，
+ * 視為一般正價購買。
+ */
+function twshop_mark_addon_cart_item( $cart_item_data, $product_id, $variation_id = 0 ) {
+    if ( empty( $_REQUEST['twshop_addon'] ) ) return $cart_item_data;
+    $rule_id = sanitize_text_field( wp_unslash( $_REQUEST['twshop_addon'] ) );
+    $user_roles = is_user_logged_in() ? wp_get_current_user()->roles : array( 'customer' );
+    foreach ( twshop_get_rules() as $rule ) {
+        if ( $rule['rule_id'] !== $rule_id ) continue;
+        if ( $rule['type'] === 'addon_product' && (int) $rule['gift_product_id'] === (int) $product_id
+            && WC()->cart && twshop_is_discount_rule_valid( $rule, $user_roles, twshop_get_cart_threshold_total( WC()->cart ), 0 ) ) {
+            $cart_item_data['twshop_addon_rule_id'] = $rule_id;
+        }
+        break;
+    }
+    return $cart_item_data;
+}
+
+function twshop_lock_addon_item_quantity( $product_quantity, $cart_item_key, $cart_item ) {
+    if ( isset( $cart_item['twshop_addon_rule_id'] ) ) {
+        return '<span class="twshop-addon-qty">' . esc_html( $cart_item['quantity'] ) . '</span>';
+    }
+    return $product_quantity;
+}
+
+function twshop_bxgy_index_key( $cart_item ) {
+    $variation = (array) ( $cart_item['variation'] ?? array() );
+    ksort( $variation );
+    return $cart_item['product_id'] . '|' . $cart_item['variation_id'] . '|' . md5( wp_json_encode( $variation ) );
+}
+
 // 智能自動贈品與加購處理核心
 function twshop_auto_manage_gifts_and_addons( $cart_obj ) {
     if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return;
@@ -221,13 +268,7 @@ function twshop_auto_manage_gifts_and_addons( $cart_obj ) {
     $rules = twshop_get_rules();
     $user_roles = is_user_logged_in() ? wp_get_current_user()->roles : array('customer');
 
-    // 計算不含當前贈品與負數手續費的純商品小計，作為達標基準
-    $cart_total = 0;
-    foreach ( $cart_obj->get_cart() as $cart_item ) {
-        if ( ! isset($cart_item['twshop_gift_rule_id']) ) {
-            $cart_total += $cart_item['line_subtotal'] ?? 0;
-        }
-    }
+    $cart_total = twshop_get_cart_threshold_total( $cart_obj );
 
     $gifts_to_add = [];
     $gifts_to_remove = [];
@@ -298,16 +339,18 @@ function twshop_auto_manage_gifts_and_addons( $cart_obj ) {
         // 索引才能保證這一點。
         $item_index = array();
         foreach ( $cart_obj->get_cart() as $idx_key => $idx_item ) {
-            if ( isset( $idx_item['twshop_gift_rule_id'] ) || isset( $idx_item['twshop_bxgy_rule_id'] ) ) continue;
-            $item_index[ $idx_item['product_id'] . '|' . $idx_item['variation_id'] ] = $idx_key;
+            if ( twshop_is_twshop_special_cart_item( $idx_item ) ) continue;
+            $item_index[ twshop_bxgy_index_key( $idx_item ) ] = $idx_key;
         }
 
         foreach ( $cart_obj->get_cart() as $split_key => $split_item ) {
             if ( ! isset( $split_item['twshop_bxgy_rule_id'] ) || $split_item['twshop_bxgy_rule_id'] !== $rule['rule_id'] ) continue;
-            $restore_qty        = $split_item['quantity'];
-            $restore_product_id = $split_item['product_id'];
+            $restore_qty          = $split_item['quantity'];
+            $restore_product_id   = $split_item['product_id'];
             $restore_variation_id = $split_item['variation_id'];
-            $index_key = $restore_product_id . '|' . $restore_variation_id;
+            // 「任意」屬性的規格必須帶回顧客當初選的屬性，否則 add_to_cart() 會失敗或遺失屬性（v25.8.36 修正）。
+            $restore_variation    = (array) ( $split_item['variation'] ?? array() );
+            $index_key = twshop_bxgy_index_key( $split_item );
 
             $cart_obj->remove_cart_item( $split_key );
 
@@ -316,8 +359,8 @@ function twshop_auto_manage_gifts_and_addons( $cart_obj ) {
             if ( $sibling_item ) {
                 $cart_obj->set_quantity( $sibling_key, $sibling_item['quantity'] + $restore_qty, false );
             } else {
-                $new_key = $cart_obj->add_to_cart( $restore_product_id, $restore_qty, $restore_variation_id );
-                $item_index[ $index_key ] = $new_key;
+                $new_key = $cart_obj->add_to_cart( $restore_product_id, $restore_qty, $restore_variation_id, $restore_variation );
+                if ( $new_key ) $item_index[ $index_key ] = $new_key;
             }
         }
 
@@ -362,20 +405,28 @@ function twshop_auto_manage_gifts_and_addons( $cart_obj ) {
     }
 
     // 第三階段：將自動帶入的贈品／買N送N 免費項目強制售價改為 $0，並處理加購商品的售價
-    foreach ( $cart_obj->get_cart() as $cart_item ) {
+    foreach ( $cart_obj->get_cart() as $cart_item_key => $cart_item ) {
         if ( isset($cart_item['twshop_gift_rule_id']) || isset($cart_item['twshop_bxgy_rule_id']) ) {
             $cart_item['data']->set_price(0);
             continue;
         }
 
-        $product_id = $cart_item['product_id'];
-        foreach ( $rules as $rule ) {
-            if ( $rule['type'] === 'addon_product' && (int)$rule['gift_product_id'] === $product_id ) {
-                if ( twshop_is_discount_rule_valid($rule, $user_roles, $cart_total, 0) ) {
-                    $cart_item['data']->set_price( floatval($rule['value']) );
-                    break; 
-                }
+        // 加購價只給「從加購區塊加入」的那一行（twshop_addon_rule_id），且只限 1 件；
+        // 顧客自己用正價買的同一商品不受影響（v25.8.36 修正：原本整個商品所有數量都變加購價）。
+        if ( isset( $cart_item['twshop_addon_rule_id'] ) ) {
+            $addon_rule = null;
+            foreach ( $rules as $rule ) {
+                if ( $rule['rule_id'] === $cart_item['twshop_addon_rule_id'] && $rule['type'] === 'addon_product' ) { $addon_rule = $rule; break; }
             }
+            if ( $addon_rule && (int) $addon_rule['gift_product_id'] === (int) $cart_item['product_id']
+                && twshop_is_discount_rule_valid( $addon_rule, $user_roles, $cart_total, 0 ) ) {
+                if ( (int) $cart_item['quantity'] > 1 ) {
+                    $cart_obj->set_quantity( $cart_item_key, 1, false );
+                }
+                $cart_item['data']->set_price( floatval( $addon_rule['value'] ) );
+                twshop_fixed_price_products()[ $cart_item['data'] ] = true;
+            }
+            // 規則失效（刪除、停用、不再達標）時不改價，維持改版前行為：以正價留在購物車。
         }
     }
 
@@ -461,8 +512,35 @@ function twshop_calculate_product_discount( $price, $product, $user_roles ) {
     return $result;
 }
 
+/**
+ * 商品折扣規則該不該套用在目前這個請求。後台頁面不套（商品編輯頁要看到原價），但本外掛自己的前台
+ * AJAX（走 admin-ajax.php，is_admin() 為 true）必須套用，否則購物車刷新/套用優惠券時用的是未折扣
+ * 小計（v25.8.36 修正）。後台訂單編輯等 WooCommerce 自己的 AJAX 仍不套用。
+ */
+/**
+ * 購物車裡被本外掛直接指定售價（加購價）的商品物件。用 WeakMap 只在記憶體標記，
+ * 不寫商品 meta——萬一其他程式對購物車商品物件呼叫 save()，旗標也不會被存進資料庫。
+ */
+function twshop_fixed_price_products() {
+    static $map = null;
+    if ( null === $map ) $map = new WeakMap();
+    return $map;
+}
+
+function twshop_is_frontend_price_context() {
+    if ( ! is_admin() ) return true;
+    if ( ! wp_doing_ajax() ) return false;
+    $action = isset( $_REQUEST['action'] ) ? sanitize_key( wp_unslash( $_REQUEST['action'] ) ) : '';
+    return in_array( $action, array(
+        'twshop_refresh_components', 'twshop_apply_points', 'twshop_redeem_points_product',
+        'twshop_remove_addon', 'apply_visual_coupon', 'remove_visual_coupon',
+    ), true );
+}
+
 function twshop_apply_product_discount_rules( $price, $product ) {
-    if ( is_admin() || $price === '' ) return $price;
+    if ( $price === '' || ! twshop_is_frontend_price_context() ) return $price;
+    // 加購價等由 twshop_auto_manage_gifts_and_addons() 直接指定的價格不再疊加商品層折扣。
+    if ( twshop_fixed_price_products()->offsetExists( $product ) ) return $price;
     $user_roles = is_user_logged_in() ? wp_get_current_user()->roles : array('customer');
     $discounted = twshop_get_calculated_discount_price( $price, $product, $user_roles );
     return ($discounted !== false) ? $discounted : $price;
@@ -717,6 +795,20 @@ function twshop_get_active_free_shipping_rule() {
         }
     }
     return null;
+}
+
+/**
+ * WooCommerce 會把運費結果依 package hash 快取在 session，hash 不含 twshop 規則，免運規則的
+ * woocommerce_package_rates filter 只在快取失效時才跑。在 package 裡加上規則內容雜湊＋小時，
+ * 後台改規則或排程起訖時間到了，既有購物車的運費才會重新計算（v25.8.36，思路同
+ * twshop_add_discount_context_to_variation_price_hash()）。
+ */
+function twshop_add_rules_context_to_shipping_packages( $packages ) {
+    $ctx = md5( wp_json_encode( twshop_get_rules() ) ) . '|' . current_time( 'Y-m-d H' );
+    foreach ( $packages as $i => $package ) {
+        $packages[ $i ]['twshop_rules_ctx'] = $ctx;
+    }
+    return $packages;
 }
 
 function twshop_free_shipping_rule_methods( $rule ) {

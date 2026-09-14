@@ -197,10 +197,13 @@ function twshop_membership_init() {
         add_filter( 'woocommerce_product_is_on_sale', 'twshop_product_is_on_sale', 99, 2 );
         add_action( 'woocommerce_cart_calculate_fees', 'twshop_apply_cart_discount_rules', 20, 1 );
         add_filter( 'woocommerce_package_rates', 'twshop_apply_free_shipping_rules', 100, 2 );
+        add_filter( 'woocommerce_cart_shipping_packages', 'twshop_add_rules_context_to_shipping_packages' );
         add_action( 'woocommerce_checkout_create_order', 'twshop_store_applied_rule_ids_on_order', 10, 1 );
         add_action( 'woocommerce_checkout_order_processed', 'twshop_increment_rule_usage_limits', 10, 3 );
         add_filter( 'woocommerce_coupon_is_valid', 'twshop_check_exclusive_coupons', 10, 2 );
         add_action( 'woocommerce_before_calculate_totals', 'twshop_auto_manage_gifts_and_addons', 10, 1 );
+        add_filter( 'woocommerce_add_cart_item_data', 'twshop_mark_addon_cart_item', 10, 3 );
+        add_filter( 'woocommerce_cart_item_quantity', 'twshop_lock_addon_item_quantity', 10, 3 );
         add_action( 'woocommerce_before_cart_table', 'twshop_classic_cart_progress' );
     }
 
