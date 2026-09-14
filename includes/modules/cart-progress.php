@@ -2,7 +2,7 @@
 /**
  * 6.1 購物車滿額/滿件進度提示條
  *
- * 自 twshop.php 拆出（Phase 4 拆檔重構）。內容為原樣搬移，未做任何邏輯或排版變更。
+ * 自 twshop.php 拆出（Phase 4 拆檔重構），之後的修正見 CLAUDE.md。
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -387,7 +387,7 @@ function twshop_check_exclusive_coupons($valid, $coupon) {
     if (!empty($applied_rules)) {
         $rules = twshop_get_rules();
         foreach($rules as $r) {
-            if (in_array($r['c_code'], $applied_rules) && !empty($r['c_exclusive']) && $r['c_exclusive'] === 'yes') {
+            if ( ! empty( $r['c_code'] ) && in_array( $r['c_code'], $applied_rules, true ) && ! empty( $r['c_exclusive'] ) && $r['c_exclusive'] === 'yes' ) {
                 throw new Exception( str_replace( '{noun}', twshop_option( 'wc_general_coupon_noun' ), twshop_option( 'wc_coupon_exclusive_error_text' ) ) );
             }
         }

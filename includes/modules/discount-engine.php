@@ -2,7 +2,7 @@
 /**
  * 6. 折扣規則引擎 (AND/OR、滿額贈與加購品防呆)
  *
- * 自 twshop.php 拆出（Phase 4 拆檔重構）。內容為原樣搬移，未做任何邏輯或排版變更。
+ * 自 twshop.php 拆出（Phase 4 拆檔重構），之後的修正見 CLAUDE.md。
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -13,8 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 /**
  * 全外掛呼叫頻率最高的函式（price / is_on_sale / fees / shipping / progress 全部經過）。
- * 加 per-request static cache 包一層外殼，實際判斷邏輯搬進 twshop_is_discount_rule_valid_compute()
- * 原封不動（純粹搬移，未改動任何判斷式），只在外層做記憶化。
+ * 加 per-request static cache 包一層外殼，實際判斷邏輯在 twshop_is_discount_rule_valid_compute()。
  *
  * 快取 key 特別注意：呼叫端有 3 處（twshop_get_coupon_progress_items() 與
  * twshop_auto_display_coupons() 兩處）會複製一份 $rule 改寫 c_code/is_coupon 成 $rule_test 再傳入，
@@ -566,15 +565,6 @@ function twshop_product_is_on_sale( $is_on_sale, $product ) {
 }
 
 /**
- * 商品折扣徽章：覆寫 woocommerce_sale_flash 輸出的文字，預設顯示折扣百分比。
- * 只處理有明確原價/售價可比較的簡單商品；可變商品（浮動區間價）判斷不出單一折扣百分比，
- * 直接回傳原本的 $html（沿用主題/WC 原生角標），不強行湊出可能誤導的數字。
- *
- * 掛在很晚的優先權（999），$html 收到的已經是主題處理過的最終版本（例如 Blocksy 會組出
- * `<span class="onsale" data-shape="...">`），這裡只用 regex 換掉外層標籤中間的文字，
- * 保留主題自己加的屬性/class 不動，讓徽章外觀完全交給主題既有 CSS 決定。
- */
-/**
  * 可變商品的折扣徽章百分比：逐一讀取「可見」規格（get_visible_children，跟 WC 內建
  * get_variation_prices() 篩選範圍一致，排除下架/未發布/庫存狀態不允許購買的規格——
  * 顧客本來就買不到的規格沒必要拿來算折扣，也可能造成庫存售完但仍在商店頁閃現折扣角標的怪異情況）
@@ -618,6 +608,14 @@ function twshop_get_variable_product_max_discount_percent( $product ) {
     return $max_percent;
 }
 
+/**
+ * 商品折扣徽章：覆寫 woocommerce_sale_flash 輸出的文字，預設顯示折扣百分比。
+ * 可變商品取所有可見規格中折扣幅度最大者（twshop_get_variable_product_max_discount_percent()）。
+ *
+ * 掛在很晚的優先權（999），$html 收到的已經是主題處理過的最終版本（例如 Blocksy 會組出
+ * `<span class="onsale" data-shape="...">`），這裡只用 regex 換掉外層標籤中間的文字，
+ * 保留主題自己加的屬性/class 不動，讓徽章外觀完全交給主題既有 CSS 決定。
+ */
 function twshop_render_discount_badge( $html, $post, $product ) {
     if ( $html === '' || ! $product instanceof WC_Product ) return $html;
 

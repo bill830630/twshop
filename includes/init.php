@@ -2,7 +2,7 @@
 /**
  * 1. 初始化與 Endpoint 註冊
  *
- * 自 twshop.php 拆出（Phase 4 拆檔重構）。內容為原樣搬移，未做任何邏輯或排版變更。
+ * 自 twshop.php 拆出（Phase 4 拆檔重構），之後的修正見 CLAUDE.md。
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -58,9 +58,12 @@ function twshop_woocommerce_missing_notice() {
 function twshop_membership_init() {
     if ( ! class_exists( 'WooCommerce' ) ) return;
 
-    // 自架更新通道（比照 ultimate-login 的 WCLON_Updater 掛法：緊接在 WooCommerce 存在
-    // 判斷之後），見 includes/class-twshop-updater.php。
-    TWSHOP_Updater::init();
+    // 自架更新通道，見 includes/class-twshop-updater.php。只在後台／排程／WP-CLI 註冊：
+    // 前台訪客不需要更新檢查，而排除清單在 transient 過期時會同步打 GitHub API（最長 8 秒），
+    // 掛在前台會偶發拖慢訪客頁面（v25.8.37）。
+    if ( is_admin() || wp_doing_cron() || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+        TWSHOP_Updater::init();
+    }
 
     // 點數兌換商品／贈品商品禁止顧客直接購買：跨 points／discount_rules 兩個模組共用，
     // 刻意不綁在任一模組的 if 區塊內——比照「跨模組共用的 AJAX action 不應該只綁在單一
@@ -106,7 +109,7 @@ function twshop_membership_init() {
     add_filter( 'woocommerce_order_get_billing_state', 'twshop_localize_order_billing_state', 10, 2 );
     add_filter( 'woocommerce_order_get_shipping_state', 'twshop_localize_order_shipping_state', 10, 2 );
 
-    // --- 前端腳本（始終掛載，僅次於上面的授權判斷）---
+    // --- 前端腳本（始終掛載）---
     add_action( 'wp_enqueue_scripts', 'twshop_global_frontend_js' );
     add_action( 'wp_footer', 'twshop_login_register_btn_text_inline_js' );
     add_filter( 'woocommerce_account_menu_items', 'twshop_modify_account_menu_items', 20 );

@@ -2,7 +2,7 @@
 /**
  * 介面 3：折扣與贈品管理（獨立 AJAX 儲存與拖曳排序）
  *
- * 自 twshop.php 拆出（Phase 4 拆檔重構）。內容為原樣搬移，未做任何邏輯或排版變更。
+ * 自 twshop.php 拆出（Phase 4 拆檔重構），之後的修正見 CLAUDE.md。
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -326,15 +326,15 @@ function twshop_ajax_save_rule() {
         'name'              => sanitize_text_field( wp_unslash( $_POST['name'] ?? '' ) ),
         'role'              => sanitize_text_field( wp_unslash( $_POST['role'] ?? '' ) ),
         'type'              => sanitize_text_field( wp_unslash( $_POST['type'] ?? '' ) ),
-        'value'             => floatval($_POST['value']),
-        'gift_product_id'   => absint($_POST['gift_product_id']),
+        'value'             => floatval( wp_unslash( $_POST['value'] ?? 0 ) ),
+        'gift_product_id'   => absint( wp_unslash( $_POST['gift_product_id'] ?? 0 ) ),
         'shipping_methods'  => $shipping_methods,
         'logic'             => sanitize_text_field( wp_unslash( $_POST['logic'] ?? '' ) ),
         'condition_type'    => $condition_type,
         'condition_values'  => $condition_values,
-        'min_amount'        => floatval($_POST['min_amount']),
-        'usage_limit'       => absint($_POST['usage_limit']),
-        'user_limit'        => absint($_POST['user_limit']),
+        'min_amount'        => floatval( wp_unslash( $_POST['min_amount'] ?? 0 ) ),
+        'usage_limit'       => absint( wp_unslash( $_POST['usage_limit'] ?? 0 ) ),
+        'user_limit'        => absint( wp_unslash( $_POST['user_limit'] ?? 0 ) ),
         'start_time'        => sanitize_text_field( wp_unslash( $_POST['start_time'] ?? '' ) ),
         'end_time'          => sanitize_text_field( wp_unslash( $_POST['end_time'] ?? '' ) ),
         'is_coupon'         => sanitize_text_field( wp_unslash( $_POST['is_coupon'] ?? 'no' ) ),

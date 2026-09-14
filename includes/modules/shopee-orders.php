@@ -24,6 +24,16 @@ function twshop_shopee_find_mapped_product( $item_id, $model_id ) {
     return $product_id ? (int) $product_id : 0;
 }
 
+function twshop_shopee_find_imported_order( $order_sn ) {
+    $existing = wc_get_orders( array(
+        'meta_key'   => '_twshop_shopee_order_sn',
+        'meta_value' => $order_sn,
+        'limit'      => 1,
+        'return'     => 'ids',
+    ) );
+    return ! empty( $existing ) ? wc_get_order( $existing[0] ) : null;
+}
+
 /**
  * 核心轉換函式：接受一份蝦皮訂單 detail（get_order_detail 回應裡單筆 order）陣列，
  * 建立/更新對應的 Woo 訂單。**冪等**：先用 _twshop_shopee_order_sn 查有沒有匯入過，
@@ -41,15 +51,8 @@ function twshop_shopee_import_order( array $detail ) {
         return new WP_Error( 'twshop_shopee_missing_order_sn', '缺少蝦皮訂單編號' );
     }
 
-    $existing = wc_get_orders( array(
-        'meta_key'   => '_twshop_shopee_order_sn',
-        'meta_value' => $order_sn,
-        'limit'      => 1,
-        'return'     => 'ids',
-    ) );
-
-    if ( ! empty( $existing ) ) {
-        $order = wc_get_order( $existing[0] );
+    $order = twshop_shopee_find_imported_order( $order_sn );
+    if ( $order ) {
         twshop_shopee_sync_order_status( $order, $detail['order_status'] ?? '' );
         return $order;
     }
@@ -162,6 +165,13 @@ function twshop_shopee_sync_order_status( $order, $shopee_status ) {
 /**
  * 15 分鐘 cron：抓上次成功時間往前推 1 小時的重疊區間（避免邊界漏單，冪等鍵擋重複），
  * 蝦皮限制單次區間 ≤ 15 天，超過就收斂成最近 15 天。
+ *
+ * v25.8.37 修正：
+ * - 任何一次 API 呼叫失敗都**不推進** twshop_shopee_orders_last_pull，下一輪會重抓同一段區間；
+ *   原本失敗 break 後仍更新時間，該時段的訂單永久漏匯。
+ * - get_order_list 的 order_status 是單一值，改成每個匯入狀態各跑一輪（原本用逗號串多值）。
+ * - 另跑一輪 update_time × CANCELLED，只同步「已經匯入過」的訂單狀態：以 create_time 查詢時，
+ *   舊訂單事後被取消永遠不會出現在區間內，Woo 訂單會一直停在處理中、庫存也不會回補。
  */
 function twshop_shopee_pull_orders() {
     $shop = twshop_shopee_shop();
@@ -178,23 +188,45 @@ function twshop_shopee_pull_orders() {
         $time_from = $time_to - 15 * DAY_IN_SECONDS;
     }
 
+    $all_ok = true;
+    foreach ( (array) $settings['order_import_status'] as $status ) {
+        if ( ! twshop_shopee_pull_order_window( 'create_time', $time_from, $time_to, $status, true ) ) $all_ok = false;
+    }
+    if ( ! twshop_shopee_pull_order_window( 'update_time', $time_from, $time_to, 'CANCELLED', false ) ) $all_ok = false;
+
+    if ( $all_ok ) {
+        update_option( 'twshop_shopee_orders_last_pull', $time_to );
+    }
+}
+
+/**
+ * 抓單一時間區間 × 單一狀態的所有分頁。$create_missing = false 時只同步已匯入訂單的狀態、不新建。
+ *
+ * @return bool 全部分頁與明細都成功才回傳 true
+ */
+function twshop_shopee_pull_order_window( $range_field, $time_from, $time_to, $status, $create_missing ) {
     $cursor = '';
 
     do {
         $args = array(
-            'time_range_field' => 'create_time',
+            'time_range_field' => $range_field,
             'time_from'        => $time_from,
             'time_to'          => $time_to,
             'page_size'        => 100,
-            'order_status'     => implode( ',', (array) $settings['order_import_status'] ),
+            'order_status'     => $status,
         );
         if ( '' !== $cursor ) $args['cursor'] = $cursor;
 
         $list_result = twshop_shopee_request( '/api/v2/order/get_order_list', $args, 'GET' );
-        if ( is_wp_error( $list_result ) ) break;
+        if ( is_wp_error( $list_result ) ) return false;
 
         $response  = $list_result['response'] ?? array();
         $order_sns = wp_list_pluck( $response['order_list'] ?? array(), 'order_sn' );
+        if ( ! $create_missing ) {
+            $order_sns = array_values( array_filter( $order_sns, function ( $sn ) {
+                return (bool) twshop_shopee_find_imported_order( sanitize_text_field( $sn ) );
+            } ) );
+        }
 
         foreach ( array_chunk( $order_sns, 50 ) as $chunk ) {
             $detail_result = twshop_shopee_request( '/api/v2/order/get_order_detail', array(
@@ -202,7 +234,7 @@ function twshop_shopee_pull_orders() {
                 'response_optional_fields' => array( 'item_list', 'recipient_address', 'total_amount', 'payment_method' ),
             ), 'POST' );
 
-            if ( is_wp_error( $detail_result ) ) continue;
+            if ( is_wp_error( $detail_result ) ) return false;
 
             $orders = ( $detail_result['response'] ?? array() )['order_list'] ?? array();
             foreach ( $orders as $order_detail ) {
@@ -214,7 +246,7 @@ function twshop_shopee_pull_orders() {
         $more   = ! empty( $response['more'] );
     } while ( $more && '' !== $cursor );
 
-    update_option( 'twshop_shopee_orders_last_pull', $time_to );
+    return true;
 }
 
 /**

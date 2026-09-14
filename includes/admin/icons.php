@@ -2,7 +2,7 @@
 /**
  * 會員中心頁籤圖示清單與 SVG 讀取
  *
- * 自 twshop.php 拆出（Phase 4 拆檔重構）。內容為原樣搬移，未做任何邏輯或排版變更。
+ * 自 twshop.php 拆出（Phase 4 拆檔重構），之後的修正見 CLAUDE.md。
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;

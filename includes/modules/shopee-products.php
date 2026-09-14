@@ -230,13 +230,36 @@ function twshop_shopee_process_push_queue() {
     $remaining = array_slice( $queue, 50 );
     update_option( 'twshop_shopee_push_queue', array_values( $remaining ), false );
 
+    // 推送失敗的商品放回佇列尾端重試（v25.8.37 修正：原本移出佇列後失敗就不再推，蝦皮庫存會一直停在舊值），
+    // 同一商品連續失敗 5 次後放棄，避免永久失敗的項目（例如蝦皮端已刪除）每 5 分鐘一直打 API。
+    $retries = get_option( 'twshop_shopee_push_retries', array() );
+    if ( ! is_array( $retries ) ) $retries = array();
+    $failed = array();
     foreach ( $batch as $product_id ) {
-        twshop_shopee_push_product( (int) $product_id, $settings );
+        $product_id = (int) $product_id;
+        if ( twshop_shopee_push_product( $product_id, $settings ) ) {
+            unset( $retries[ $product_id ] );
+            continue;
+        }
+        $retries[ $product_id ] = ( $retries[ $product_id ] ?? 0 ) + 1;
+        if ( $retries[ $product_id ] < 5 ) {
+            $failed[] = $product_id;
+        } else {
+            unset( $retries[ $product_id ] );
+        }
+    }
+    update_option( 'twshop_shopee_push_retries', $retries, false );
+
+    foreach ( $failed as $product_id ) {
+        twshop_shopee_queue_push( $product_id );
     }
 }
 
 /**
  * 單一商品的推送邏輯（庫存/價格各自判斷是否跳過），供 cron 批次與「立即推送」AJAX 共用。
+ */
+/**
+ * @return bool 有任何一次 API 呼叫失敗回傳 false（佇列會重試），其餘（含沒有綁定、不需推送）回傳 true
  */
 function twshop_shopee_push_product( $product_id, $settings = null ) {
     global $wpdb;
@@ -246,10 +269,12 @@ function twshop_shopee_push_product( $product_id, $settings = null ) {
     $rows  = $wpdb->get_results( $wpdb->prepare(
         "SELECT * FROM {$table} WHERE product_id=%d AND status='linked'", $product_id
     ), ARRAY_A );
-    if ( empty( $rows ) ) return;
+    if ( empty( $rows ) ) return true;
 
     $product = wc_get_product( $product_id );
-    if ( ! $product ) return;
+    if ( ! $product ) return true;
+
+    $ok = true;
 
     foreach ( $rows as $row ) {
         if ( 'yes' === $settings['stock_push_enabled'] && $product->get_manage_stock() ) {
@@ -271,6 +296,7 @@ function twshop_shopee_push_product( $product_id, $settings = null ) {
                         'last_error'        => null,
                     ), array( 'id' => $row['id'] ) );
                 } else {
+                    $ok = false;
                     $wpdb->update( $table, array( 'last_error' => $result->get_error_message() ), array( 'id' => $row['id'] ) );
                 }
             }
@@ -295,9 +321,12 @@ function twshop_shopee_push_product( $product_id, $settings = null ) {
                         'last_error'        => null,
                     ), array( 'id' => $row['id'] ) );
                 } else {
+                    $ok = false;
                     $wpdb->update( $table, array( 'last_error' => $result->get_error_message() ), array( 'id' => $row['id'] ) );
                 }
             }
         }
     }
+
+    return $ok;
 }

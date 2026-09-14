@@ -2,7 +2,7 @@
 /**
  * 核心 helper：規則快取、規則使用次數、贈品優惠券、模組開關與定義
  *
- * 自 twshop.php 拆出（Phase 4 拆檔重構）。內容為原樣搬移，未做任何邏輯或排版變更。
+ * 自 twshop.php 拆出（Phase 4 拆檔重構），之後的修正見 CLAUDE.md。
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -73,19 +73,6 @@ function twshop_delete_rule_usage_total( $rule_id ) {
 }
 
 /**
- * 修補沒有 rule_id（或值為空）的舊規則資料。
- *
- * 早期版本的規則陣列沒有 rule_id 這個欄位，這類規則在後台編輯表單裡的隱藏欄位會被
- * 渲染成 value=""；儲存時 twshop_ajax_save_rule() 一看到空字串就會用 uniqid('rule_')
- * 生一個全新 ID，導致比對永遠對不到原本那筆（原本那筆也還是沒有 rule_id），於是「更新」
- * 變成在陣列尾端多插入一筆新資料，畫面上原本那張卡片看起來就像「存了也沒用」；
- * 刪除同一筆舊規則時，前端 JS 甚至因為 rule_id 是空字串直接 `if(!rule_id){ $form.remove(); return; }`
- * 短路掉，根本沒送出刪除的 AJAX 請求，重新整理後又會原封不動地跑回來。
- *
- * 這裡在每次讀取規則列表時檢查一次，把缺 rule_id 的項目補上真正的唯一值並立即寫回，
- * 補過一次之後全部規則都有正常 rule_id，就不會再觸發寫入。
- */
-/**
  * 讀出折扣規則的限制條件（type ＋ values），並相容舊資料。
  *
  * 舊版規則只有單一的 `category` / `tag` 欄位，尚未重新儲存過的規則沒有
@@ -104,6 +91,19 @@ function twshop_get_rule_condition( $rule ) {
     return array( $type, $values );
 }
 
+/**
+ * 修補沒有 rule_id（或值為空）的舊規則資料。
+ *
+ * 早期版本的規則陣列沒有 rule_id 這個欄位，這類規則在後台編輯表單裡的隱藏欄位會被
+ * 渲染成 value=""；儲存時 twshop_ajax_save_rule() 一看到空字串就會用 uniqid('rule_')
+ * 生一個全新 ID，導致比對永遠對不到原本那筆（原本那筆也還是沒有 rule_id），於是「更新」
+ * 變成在陣列尾端多插入一筆新資料，畫面上原本那張卡片看起來就像「存了也沒用」；
+ * 刪除同一筆舊規則時，前端 JS 甚至因為 rule_id 是空字串直接 `if(!rule_id){ $form.remove(); return; }`
+ * 短路掉，根本沒送出刪除的 AJAX 請求，重新整理後又會原封不動地跑回來。
+ *
+ * 這裡在每次讀取規則列表時檢查一次，把缺 rule_id 的項目補上真正的唯一值並立即寫回，
+ * 補過一次之後全部規則都有正常 rule_id，就不會再觸發寫入。
+ */
 function twshop_backfill_missing_rule_ids( $rules ) {
     if ( ! is_array( $rules ) || empty( $rules ) ) return $rules;
     $changed = false;
@@ -409,10 +409,6 @@ function twshop_render_purchase_restricted_notice() {
 }
 
 /**
- * 可開關模組的清單（label + 說明文字），供「系統設定 ▸ 模組開關」與「儀表板」共用，
- * 避免模組清單分散在兩處各自維護、改一邊忘了改另一邊。
- */
-/**
  * 商品網址（slug）是否改用商品編號。**單一讀取入口**，所以刻意不登記進
  * twshop_get_option_defaults()——那張表的用途是「同一個純量 option 在多處被讀取、
  * 各處各寫一次預設值導致漂移」，只有一個入口的 option 硬塞進去反而讓那張表的語意變模糊
@@ -425,6 +421,10 @@ function twshop_product_slug_use_id_enabled() {
     return 'yes' === get_option( 'wc_product_slug_use_id', 'no' );
 }
 
+/**
+ * 可開關模組的清單（label + 說明文字），供「系統設定 ▸ 模組開關」與「儀表板」共用，
+ * 避免模組清單分散在兩處各自維護、改一邊忘了改另一邊。
+ */
 function twshop_get_module_definitions() {
     return array(
         'member_tiers'    => array( 'label' => '會員分級', 'desc' => '會員等級升降、生日禮、升等禮' ),

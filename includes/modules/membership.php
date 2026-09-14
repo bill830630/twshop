@@ -2,7 +2,7 @@
 /**
  * 7. 智慧會員中心與排程發放
  *
- * 自 twshop.php 拆出（Phase 4 拆檔重構）。內容為原樣搬移，未做任何邏輯或排版變更。
+ * 自 twshop.php 拆出（Phase 4 拆檔重構），之後的修正見 CLAUDE.md。
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -1363,7 +1363,8 @@ function twshop_apply_visual_coupon() {
     $rules = twshop_module_enabled( 'discount_rules' ) ? get_option( 'wc_discount_rules_settings', array() ) : array();
     $is_rule_coupon = false;
     foreach ($rules as $rule) {
-        if (!empty($rule['is_coupon']) && $rule['is_coupon'] === 'yes' && $rule['c_code'] === $code) {
+        if ( ! empty( $rule['is_coupon'] ) && $rule['is_coupon'] === 'yes' && ! empty( $rule['c_code'] ) && 0 === strcasecmp( $rule['c_code'], $code ) ) {
+            $code = $rule['c_code']; // 以規則設定的大小寫為準，後續 session 比對才一致
             if (!empty($rule['c_exclusive']) && $rule['c_exclusive'] === 'yes') {
                 if ( WC()->cart && !empty(WC()->cart->get_applied_coupons()) ) wp_send_json_error( array( 'message' => str_replace( '{noun}', twshop_option( 'wc_general_coupon_noun' ), twshop_option( 'wc_coupon_exclusive_error_text' ) ) ) );
             }
