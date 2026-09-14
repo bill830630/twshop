@@ -235,3 +235,6 @@ input:checked + .twshop-slider:before { transform:translateX(20px); }
 .redeem-chip-cost:hover{ color:#005177; }
 .redeem-chip-cost-input{ width:70px; }
 .redeem-chip-cost-note{ color:#72777c; font-style:italic; font-size:12px; }
+/* 單次兌換上限數量 chip，v25.8.32 新增，跟 .redeem-chip-cost 同一套就地編輯樣式 */
+.redeem-chip-maxqty{ cursor:pointer; text-decoration:underline dotted; color:#72777c; font-size:12px; }
+.redeem-chip-maxqty:hover{ color:#005177; }

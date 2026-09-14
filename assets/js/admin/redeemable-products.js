@@ -19,6 +19,9 @@
  *      跟其他頁面視覺一致；改用 jQuery 節點 + .text() 組裝，不再是字串拼接 innerHTML
  *      （商品名稱含 <、& 等字元時不會被誤判成 HTML）。
  *   3. 已加入項目（僅 type === 'product'）的點數可以點擊就地編輯，不用先移除再重新加入。
+ * v25.8.32：新增 max_qty（單次兌換上限數量）欄位，三種 type 都適用，一樣走「就地點擊編輯」，
+ * 跟點數欄位共用同一套 commit/cancel 邏輯（抽出 startInlineEdit() 共用，避免兩份幾乎一樣的
+ * 程式碼各自維護）。
  */
 jQuery(document).ready(function($){
     var TYPE_LABEL = { category: '分類', tag: '標籤' };
@@ -45,12 +48,18 @@ jQuery(document).ready(function($){
             if (item.type === 'product') {
                 $chip.append(
                     $('<span class="redeem-chip-cost" tabindex="0" title="點擊修改所需點數"></span>')
-                        .attr('data-idx', i)
+                        .attr('data-idx', i).attr('data-field', 'points_cost')
                         .text(item.points_cost + ' 點')
                 );
             } else {
                 $chip.append($('<span class="redeem-chip-cost-note"></span>').text('依售價自動換算'));
             }
+
+            $chip.append(
+                $('<span class="redeem-chip-maxqty" tabindex="0" title="點擊修改單次兌換上限數量"></span>')
+                    .attr('data-idx', i).attr('data-field', 'max_qty')
+                    .text('上限 ' + (item.max_qty || 1))
+            );
 
             $chip.append(
                 $('<a href="#" class="twshop-chip-remove remove-redeem-product-btn">&times;</a>').attr('data-idx', i)
@@ -94,12 +103,16 @@ jQuery(document).ready(function($){
             if (!pts || pts <= 0) { alert('請輸入所需點數'); return; }
         }
 
+        var maxQty = parseInt($wrap.find('.redeem-product-add-maxqty').val(), 10);
+        if (!maxQty || maxQty <= 0) { maxQty = 1; }
+
         var arr = readList($wrap);
         if (arr.some(function(it){ return it.type === type && String(it.id) === String(id); })) { alert('此項目已在兌換清單中'); return; }
-        arr.push({ type: type, id: parseInt(id, 10), name: name, points_cost: type === 'product' ? parseInt(pts, 10) : 0 });
+        arr.push({ type: type, id: parseInt(id, 10), name: name, points_cost: type === 'product' ? parseInt(pts, 10) : 0, max_qty: maxQty });
         writeList($wrap, arr);
         renderRedeemProducts($wrap);
         $wrap.find('.redeem-product-add-points').val('');
+        $wrap.find('.redeem-product-add-maxqty').val(1);
 
         if (type === 'product') {
             // selectWoo 需要 .trigger('change') 畫面才會同步清空，直接改 .val() 沒有用。
@@ -119,14 +132,16 @@ jQuery(document).ready(function($){
         renderRedeemProducts($wrap);
     });
 
-    // 就地編輯所需點數：點擊 chip 上的點數文字，原地換成數字輸入框，Enter/失焦寫回、Esc 取消。
-    $(document).on('click', '.redeem-chip-cost', function(){
-        var $span = $(this);
+    // 就地編輯所需點數／單次兌換上限：點擊 chip 上的文字，原地換成數字輸入框，
+    // Enter/失焦寫回、Esc 取消。data-field 決定寫回 item 物件的哪個鍵
+    // （'points_cost' 或 'max_qty'），兩種欄位共用同一套 commit/cancel 邏輯。
+    function startInlineEdit($span) {
         if ($span.find('input').length) return; // 已經在編輯中，不重複進入
 
         var $wrap = $span.closest('.twshop-redeem-products-section');
-        var idx = $span.data('idx');
-        var current = parseInt($span.text(), 10) || 0;
+        var idx   = $span.data('idx');
+        var field = $span.data('field');
+        var current = parseInt($span.text().replace(/[^0-9]/g, ''), 10) || 0;
         var $inputEl = $('<input type="number" min="1" class="redeem-chip-cost-input">').val(current);
         // 移除仍保有焦點的 <input>（無論是 Enter 提交後、還是 Esc 取消後的重新渲染）多半會讓
         // 瀏覽器再補觸發一次 blur——沒有這個旗標擋，Esc 取消後緊接著的那次 blur 還是會呼叫
@@ -139,7 +154,7 @@ jQuery(document).ready(function($){
             var val = parseInt($inputEl.val(), 10);
             if (val && val > 0) {
                 var arr = readList($wrap);
-                arr[idx].points_cost = val;
+                arr[idx][field] = val;
                 writeList($wrap, arr);
             }
             renderRedeemProducts($wrap);
@@ -159,5 +174,9 @@ jQuery(document).ready(function($){
 
         $span.empty().append($inputEl);
         $inputEl.trigger('focus').trigger('select');
+    }
+
+    $(document).on('click', '.redeem-chip-cost, .redeem-chip-maxqty', function(){
+        startInlineEdit($(this));
     });
 });

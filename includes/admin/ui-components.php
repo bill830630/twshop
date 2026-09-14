@@ -328,6 +328,9 @@ function twshop_sanitize_order_status_array( $value ) {
 // points_cost 只有 type=product 才要求必填正整數：type=category/tag 的兌換點數
 // 改成讀取端依各商品售價即時換算（v25.8.17 起，見 twshop_calc_redeem_cost_from_price()），
 // 這裡存的 points_cost 對分類/標籤沒有意義，不驗證也不需要——分類/標籤只要 id 合法就收。
+//
+// max_qty（v25.8.32 新增）：單次兌換最多可選的數量，三種 type 都適用（不像 points_cost
+// 只對 type=product 有意義），沒填或填非正整數一律回退成 1，跟舊資料／前台既有行為一致。
 function twshop_sanitize_points_redeemable_products( $value ) {
     $decoded = json_decode( is_string( $value ) ? stripslashes( $value ) : '[]', true );
     if ( ! is_array( $decoded ) ) return array();
@@ -338,11 +341,12 @@ function twshop_sanitize_points_redeemable_products( $value ) {
         $type = isset( $row['type'] ) && in_array( $row['type'], array( 'product', 'category', 'tag' ), true ) ? $row['type'] : 'product';
         $id   = isset( $row['id'] ) ? absint( $row['id'] ) : absint( $row['product_id'] ?? 0 );
         $points_cost = absint( $row['points_cost'] ?? 0 );
+        $max_qty     = max( 1, absint( $row['max_qty'] ?? 1 ) );
         $dedup_key = $type . ':' . $id;
         if ( $id <= 0 || isset( $seen[ $dedup_key ] ) ) continue;
         if ( 'product' === $type && $points_cost <= 0 ) continue;
         $seen[ $dedup_key ] = true;
-        $result[] = array( 'type' => $type, 'id' => $id, 'points_cost' => $points_cost );
+        $result[] = array( 'type' => $type, 'id' => $id, 'points_cost' => $points_cost, 'max_qty' => $max_qty );
     }
     return $result;
 }

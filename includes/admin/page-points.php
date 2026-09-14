@@ -321,12 +321,15 @@ function twshop_points_import_tab() {
  * 陽春下拉——商品多的店找不到、超過 200 筆的商品選不到。已加入清單的每筆項目改用
  * twshop_get_redeemable_entry_display_name() 在伺服器端把名稱解析好、直接寫進隱藏欄位
  * 的 JSON 裡（多一個 name 鍵，只給這裡渲染清單用，twshop_sanitize_points_redeemable_products()
- * 存檔時只白名單挑 type/id/points_cost，name 會被自然忽略，不影響 option 本身的儲存格式）
+ * 存檔時只白名單挑 type/id/points_cost/max_qty，name 會被自然忽略，不影響 option 本身的儲存格式）
  * ——AJAX 搜尋模式下 <select> 不會預先塞滿選項，JS 端沒有 DOM 可以查商品名稱，必須由
  * PHP 端先解析好。
+ *
+ * v25.8.32 起每筆多一個 max_qty（單次兌換上限數量，三種 type 都適用），跟 points_cost
+ * 一樣走「就地點擊編輯」的 chip UI，見 assets/js/admin/redeemable-products.js。
  */
 function twshop_render_redeemable_products_field( $redeemable_products, $cat_options, $tag_options ) {
-    // 正規化成 {type, id, points_cost}：舊資料（升級前存的 {product_id, points_cost}，
+    // 正規化成 {type, id, points_cost, max_qty}：舊資料（升級前存的 {product_id, points_cost}，
     // 管理員還沒重新儲存過這一頁）也要能正常顯示，不能直接把 $redeemable_products
     // 原封不動印進隱藏欄位，否則 JS 端會讀不到 id 而整批消失。
     $normalized = array();
@@ -370,9 +373,10 @@ function twshop_render_redeemable_products_field( $redeemable_products, $cat_opt
             </select>
             <input type="number" class="redeem-product-add-points" min="1" placeholder="所需點數" />
             <span class="redeem-category-cost-note" style="display:none; font-size:12px; color:#72777c;">依商品售價自動換算，不需填點數</span>
+            <input type="number" class="redeem-product-add-maxqty" min="1" placeholder="單次兌換上限" value="1" style="width:110px;" title="顧客單次最多可兌換幾個（預設 1）" />
             <button type="button" class="button add-redeem-product-btn">加入</button>
         </div>
-        <p class="description">分類/標籤是動態展開：加入後，日後新上架進該分類/標籤的商品會自動一併開放兌換，不需要回來這裡重新設定；兌換點數也不是統一值，而是依各商品目前售價換算（換算匯率沿用上方「點數折抵匯率」設定），避免同分類裡貴的商品被低點數賤賣。</p>
+        <p class="description">分類/標籤是動態展開：加入後，日後新上架進該分類/標籤的商品會自動一併開放兌換，不需要回來這裡重新設定；兌換點數也不是統一值，而是依各商品目前售價換算（換算匯率沿用上方「點數折抵匯率」設定），避免同分類裡貴的商品被低點數賤賣。「單次兌換上限」是顧客一次點擊「立即兌換」最多能選幾個，預設 1（跟改版前行為相同）。</p>
     </div>
     <?php twshop_enqueue_asset_script( 'admin/redeemable-products' ); ?>
     <?php

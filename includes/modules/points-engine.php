@@ -668,6 +668,10 @@ function twshop_normalize_redeemable_entry( $row ) {
         'type'        => $type,
         'id'          => $id,
         'points_cost' => absint( $row['points_cost'] ?? 0 ),
+        // 單次兌換（單一購物車項目）最多可選的數量，v25.8.32 新增。分類/標籤展開出來的
+        // 每個商品共用同一筆設定的這個上限值——這兩種類型本來就沒有「逐商品」的編輯介面，
+        // 跟 points_cost 對分類/標籤沒意義、改用售價換算是同一種取捨。
+        'max_qty'     => max( 1, absint( $row['max_qty'] ?? 1 ) ),
     );
 }
 
@@ -718,7 +722,7 @@ function twshop_calc_redeem_cost_from_price( $price ) {
  * 分類的自動換算值不同，把該商品的單一商品設定排在分類設定前面即可（目前清單沒有
  * 拖曳排序，只能靠新增順序調整）。
  *
- * @return array 每筆 [ 'product' => WC_Product, 'points_cost' => int ]
+ * @return array 每筆 [ 'product' => WC_Product, 'points_cost' => int, 'max_qty' => int ]
  */
 function twshop_resolve_redeemable_products( $list ) {
     $resolved = array();
@@ -761,7 +765,7 @@ function twshop_resolve_redeemable_products( $list ) {
             }
 
             $seen[ $product_id ] = true;
-            $resolved[] = array( 'product' => $product, 'points_cost' => $cost );
+            $resolved[] = array( 'product' => $product, 'points_cost' => $cost, 'max_qty' => $entry['max_qty'] );
         }
     }
 
@@ -769,7 +773,7 @@ function twshop_resolve_redeemable_products( $list ) {
 }
 
 /**
- * 查詢單一商品目前的兌換點數成本（AJAX 兌換時驗證用）。跟
+ * 查詢單一商品目前的兌換點數成本＋單次可兌換數量上限（AJAX 兌換時驗證用）。跟
  * twshop_resolve_redeemable_products() 用同一套「清單順序、第一筆命中為準」邏輯與
  * 同一套成本計算規則（type=product 用手動設定值、type=category/tag 用
  * twshop_calc_redeem_cost_from_price() 依售價換算），但不需要展開整份清單、
@@ -777,9 +781,15 @@ function twshop_resolve_redeemable_products( $list ) {
  * 查單一商品是否屬於該分類/標籤即可，沒必要為了驗證一個商品而把整個分類的商品清單
  * 都撈出來。
  *
- * @return int 0 代表不開放兌換
+ * v25.8.32 起改回傳 cost/max_qty 兩個值（原本只回傳 cost 的
+ * twshop_get_redeem_cost_for_product()，此函式當時全站唯一呼叫端就是這裡改名後的
+ * twshop_ajax_redeem_points_product()，改名/改簽名沒有其他呼叫端需要同步更新）——
+ * 兩者本來就是同一次查找算出來的，合併成一次回傳比另外再寫一支重複的迴圈查 max_qty
+ * 更不容易兩邊查找邏輯之後改到不同步。
+ *
+ * @return array [ 'cost' => int, 'max_qty' => int ]，cost 為 0 代表不開放兌換
  */
-function twshop_get_redeem_cost_for_product( $product_id ) {
+function twshop_get_redeem_info_for_product( $product_id ) {
     $list = get_option( 'wc_points_redeemable_products', array() );
     foreach ( (array) $list as $row ) {
         $entry = twshop_normalize_redeemable_entry( $row );
@@ -787,17 +797,19 @@ function twshop_get_redeem_cost_for_product( $product_id ) {
 
         if ( 'product' === $entry['type'] ) {
             if ( $entry['points_cost'] <= 0 ) continue;
-            if ( $entry['id'] === (int) $product_id ) return $entry['points_cost'];
+            if ( $entry['id'] === (int) $product_id ) {
+                return array( 'cost' => $entry['points_cost'], 'max_qty' => $entry['max_qty'] );
+            }
         } else {
             $tax = 'category' === $entry['type'] ? 'product_cat' : 'product_tag';
             if ( ! has_term( $entry['id'], $tax, $product_id ) ) continue;
             $product = wc_get_product( $product_id );
             if ( ! $product ) continue;
             $cost = twshop_calc_redeem_cost_from_price( $product->get_price() );
-            if ( $cost > 0 ) return $cost;
+            if ( $cost > 0 ) return array( 'cost' => $cost, 'max_qty' => $entry['max_qty'] );
         }
     }
-    return 0;
+    return array( 'cost' => 0, 'max_qty' => 0 );
 }
 
 /**
@@ -846,11 +858,14 @@ function twshop_render_points_redeemable_products_section() {
     $committed = twshop_get_committed_redeem_points();
     $pt        = twshop_points_term();
 
-    // 以 product_id 為 key 組一份查詢 map，供迴圈內取用對應的兌換點數（resolved 已經是
-    // 依清單順序、去重後的結果，見 twshop_resolve_redeemable_products()）。
-    $cost_map = array();
+    // 以 product_id 為 key 組一份查詢 map，供迴圈內取用對應的兌換點數／單次可兌換數量上限
+    // （resolved 已經是依清單順序、去重後的結果，見 twshop_resolve_redeemable_products()）。
+    $cost_map    = array();
+    $max_qty_map = array();
     foreach ( $resolved as $row ) {
-        $cost_map[ $row['product']->get_id() ] = (int) $row['points_cost'];
+        $pid_key = $row['product']->get_id();
+        $cost_map[ $pid_key ]    = (int) $row['points_cost'];
+        $max_qty_map[ $pid_key ] = (int) $row['max_qty'];
     }
 
     // 跟 twshop_render_cart_addons() 一樣用 WP_Query 建立真正的 loop，確保主題所有
@@ -886,9 +901,12 @@ function twshop_render_points_redeemable_products_section() {
         $GLOBALS['product'] = $product_obj;
 
         $cost      = $cost_map[ $pid ];
+        $max_qty   = max( 1, $max_qty_map[ $pid ] );
         $in_cart   = twshop_cart_has_redeem_product( $pid );
         // 已在購物車中的這筆本身也算在 $committed 裡，判斷「還能不能兌換其他的」時要先加回來，
-        // 否則自己會把自己判定成「不足」。
+        // 否則自己會把自己判定成「不足」。這裡只檢查「至少負擔得起 1 個」，選了較大數量卻點數
+        // 不夠的情況留給 twshop_ajax_redeem_points_product() 送出時再擋，不在這裡為每個可能的
+        // 數量都重算一次可負擔上限（多一層複雜度，換來的只是選單少幾個選項的次要體驗差異）。
         $available = $in_cart || ( ( $balance - $committed ) >= $cost );
 
         // 覆蓋價格顯示：用所需點數取代原本的售價（跟加購商品覆蓋成特價劃線同一個 filter，
@@ -901,7 +919,10 @@ function twshop_render_points_redeemable_products_section() {
         // 覆蓋加入購物車按鈕：換成點數兌換專屬按鈕，走 twshop_redeem_points_product／
         // twshop_remove_addon 這兩支既有 AJAX handler（見 twshop-frontend.js），
         // 不是 WooCommerce 原生的 ajax_add_to_cart（那樣會用商品原價把商品加進購物車）。
-        $button_filter = function( $html, $prod, $args ) use ( $pid, $in_cart, $available, $pt ) {
+        // max_qty > 1 時，「立即兌換」按鈕前面多插入一顆數量下拉選單（1~max_qty），
+        // JS 端讀取這顆下拉的值當作兌換數量一併送出（見 twshop-frontend.js）；
+        // max_qty === 1（預設值，多數安裝不會去改這個新欄位）維持原本純按鈕、無下拉選單的畫面。
+        $button_filter = function( $html, $prod, $args ) use ( $pid, $in_cart, $available, $max_qty, $pt ) {
             if ( (int) $prod->get_id() !== $pid ) return $html;
             if ( $in_cart ) {
                 return sprintf(
@@ -912,7 +933,19 @@ function twshop_render_points_redeemable_products_section() {
             if ( ! $available ) {
                 return sprintf( '<button type="button" class="button" disabled>%s</button>', esc_html( $pt . '不足' ) );
             }
-            return sprintf(
+            $qty_select = '';
+            if ( $max_qty > 1 ) {
+                $options = '';
+                for ( $n = 1; $n <= $max_qty; $n++ ) {
+                    $options .= sprintf( '<option value="%1$d">%1$d</option>', $n );
+                }
+                $qty_select = sprintf(
+                    '<select class="twshop-redeem-qty-select" data-product_id="%d">%s</select>',
+                    esc_attr( $pid ),
+                    $options
+                );
+            }
+            return $qty_select . sprintf(
                 '<button type="button" data-product_id="%d" class="button twshop-redeem-product-btn">立即兌換</button>',
                 esc_attr( $pid )
             );
@@ -1080,6 +1113,13 @@ function twshop_ajax_apply_points() {
  * twshop_deduct_points_on_checkout() 結帳時扣點。點數本身在這裡不扣，比照現金折抵
  * （twshop_ajax_apply_points()）的既有做法，實際扣點延後到結帳完成，顧客改變主意
  * 移除購物車項目就不會真的損失點數。
+ *
+ * v25.8.32 起支援單次兌換數量（1~該筆設定的 max_qty，見 twshop_get_redeem_info_for_product()）：
+ * qty 直接乘上單位點數存進 twshop_points_redeem_cost（這個 meta 存的是「整個購物車項目」的
+ * 總點數，不是單價）——twshop_get_committed_redeem_points()／twshop_deduct_points_on_checkout()
+ * 兩處既有邏輯本來就只是單純加總這個 meta、完全不看數量，存成總額而不是單價，這兩處
+ * 下游都不需要跟著改。max_qty 本身也一併存進 cart item meta（twshop_points_redeem_max_qty），
+ * 讓 twshop_zero_redeemed_product_price() 之後鎖定數量時不用再查一次 option。
  */
 function twshop_ajax_redeem_points_product() {
     check_ajax_referer( 'twshop_frontend_action', 'twshop_nonce' );
@@ -1088,18 +1128,28 @@ function twshop_ajax_redeem_points_product() {
     }
 
     $product_id = absint( $_POST['product_id'] ?? 0 );
-    $cost = twshop_get_redeem_cost_for_product( $product_id );
-    if ( $cost <= 0 ) {
+    $info       = twshop_get_redeem_info_for_product( $product_id );
+    $unit_cost  = $info['cost'];
+    $max_qty    = max( 1, $info['max_qty'] );
+    if ( $unit_cost <= 0 ) {
         wp_send_json_error( array( 'message' => '此商品不開放' . twshop_points_term() . '兌換' ) );
     }
+
+    // 數量來自前台下拉選單（1~max_qty，見 twshop_render_points_redeemable_products_section()），
+    // 這裡是防止直接偽造 POST 送超過上限的最後防線，夾在合法範圍內，不特別回錯誤——
+    // 正常操作路徑本來就選不出超過上限的值，沒必要為了這個異常路徑多寫一則錯誤訊息。
+    $qty = absint( $_POST['qty'] ?? 1 );
+    $qty = max( 1, min( $qty, $max_qty ) );
 
     if ( twshop_cart_has_redeem_product( $product_id ) ) {
         wp_send_json_error( array( 'message' => '此商品已在購物車中' ) );
     }
 
+    $total_cost = $unit_cost * $qty;
+
     $balance   = (int) get_user_meta( get_current_user_id(), 'twshop_reward_points', true );
     $committed = twshop_get_committed_redeem_points();
-    if ( ( $balance - $committed ) < $cost ) {
+    if ( ( $balance - $committed ) < $total_cost ) {
         wp_send_json_error( array( 'message' => twshop_points_term() . '不足，無法兌換' ) );
     }
 
@@ -1108,9 +1158,10 @@ function twshop_ajax_redeem_points_product() {
     // 用 bypass 旗標跳過那道限制，否則 add_to_cart() 會自己擋自己。
     twshop_bypass_purchase_restriction( true );
     try {
-        $added = WC()->cart->add_to_cart( $product_id, 1, 0, array(), array(
+        $added = WC()->cart->add_to_cart( $product_id, $qty, 0, array(), array(
             'twshop_points_redeem_product_id' => $product_id,
-            'twshop_points_redeem_cost'       => $cost,
+            'twshop_points_redeem_cost'       => $total_cost,
+            'twshop_points_redeem_max_qty'    => $max_qty,
         ) );
     } finally {
         twshop_bypass_purchase_restriction( false );
@@ -1126,31 +1177,54 @@ function twshop_ajax_redeem_points_product() {
         wp_send_json_error( array( 'message' => $message ) );
     }
 
+    // 防呆：WC()->cart->add_to_cart() 的 $quantity 參數不保證一定照實加入——商品若被管理員
+    // 另外勾選「售完限購一件」（sold_individually），WooCommerce 核心會直接無聲把數量壓成 1，
+    // 完全不管這裡傳的 $qty 是多少。若不在這裡回頭核對，會出現「顧客選了 2 個、扣了 2 個的
+    // 點數，購物車卻只真的加進 1 個」的落差——用實際加入的數量重新核算並覆寫
+    // twshop_points_redeem_cost，讓扣點金額永遠對得上購物車裡真正拿到的數量。
+    $actual_qty = isset( WC()->cart->cart_contents[ $added ]['quantity'] ) ? (int) WC()->cart->cart_contents[ $added ]['quantity'] : $qty;
+    if ( $actual_qty !== $qty ) {
+        WC()->cart->cart_contents[ $added ]['twshop_points_redeem_cost'] = $unit_cost * $actual_qty;
+        WC()->cart->set_session();
+    }
+
     wp_send_json_success( array( 'message' => '兌換成功' ) );
 }
 
 /**
- * 把「用點數兌換商品」的購物車項目售價強制歸零，並鎖定數量為 1（避免透過修改購物車數量
- * 無限取得免費商品）。獨立於 discount_rules 模組的 twshop_auto_manage_gifts_and_addons()
- * 之外——兌換商品是 points 模組自己的功能，不應該依賴 discount_rules 模組是否啟用。
+ * 把「用點數兌換商品」的購物車項目售價強制歸零，並把數量鎖在加入購物車當下決定好的
+ * 數量（不能再被改動——避免透過修改購物車數量無限取得免費商品）。獨立於 discount_rules
+ * 模組的 twshop_auto_manage_gifts_and_addons() 之外——兌換商品是 points 模組自己的功能，
+ * 不應該依賴 discount_rules 模組是否啟用。
+ *
+ * v25.8.32 起數量上限不再寫死 1，改夾在加入購物車當下存進 cart item meta 的
+ * twshop_points_redeem_max_qty（見 twshop_ajax_redeem_points_product()）——這是
+ * 唯一合法的加入管道，數量選擇只在那個時間點發生一次，購物車頁的數量欄位本身沒有
+ * 輸入框可以再改（見下方 twshop_lock_redeemed_item_quantity()），這裡的 set_quantity()
+ * 純粹是防線，擋掉透過購物車更新端點直接偽造請求的異常路徑。缺這個 meta 的舊購物車項目
+ * （部署當下已經在顧客購物車 session 裡的舊資料）退回舊版行為鎖 1，避免誤判成無上限。
  */
 function twshop_zero_redeemed_product_price( $cart_obj ) {
     if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return;
     foreach ( $cart_obj->get_cart() as $cart_item_key => $cart_item ) {
         if ( ! isset( $cart_item['twshop_points_redeem_product_id'] ) ) continue;
-        if ( (int) $cart_item['quantity'] !== 1 ) {
-            $cart_obj->set_quantity( $cart_item_key, 1, false );
+        $max_qty = isset( $cart_item['twshop_points_redeem_max_qty'] )
+            ? max( 1, (int) $cart_item['twshop_points_redeem_max_qty'] )
+            : 1;
+        if ( (int) $cart_item['quantity'] > $max_qty ) {
+            $cart_obj->set_quantity( $cart_item_key, $max_qty, false );
         }
         $cart_item['data']->set_price( 0 );
     }
 }
 
-// 購物車頁「用點數兌換商品」項目的數量欄位改成純文字顯示（固定 1），避免顧客透過原生數量
-// 輸入框把免費商品的數量調大；伺服器端 twshop_zero_redeemed_product_price() 仍會強制歸一，
-// 這裡只是同步前端顯示，避免出現「畫面上能改、但改了沒有用」的落差。
+// 購物車頁「用點數兌換商品」項目的數量欄位改成純文字顯示（顯示加入時決定好的實際數量，
+// 不是永遠顯示 1），避免顧客透過原生數量輸入框把免費商品的數量調大；伺服器端
+// twshop_zero_redeemed_product_price() 仍會強制夾住上限，這裡只是同步前端顯示，
+// 避免出現「畫面上能改、但改了沒有用」的落差。
 function twshop_lock_redeemed_item_quantity( $product_quantity, $cart_item_key, $cart_item ) {
     if ( isset( $cart_item['twshop_points_redeem_product_id'] ) ) {
-        return '<span class="twshop-redeem-qty">1</span>';
+        return '<span class="twshop-redeem-qty">' . esc_html( $cart_item['quantity'] ) . '</span>';
     }
     return $product_quantity;
 }

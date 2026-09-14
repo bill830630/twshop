@@ -368,21 +368,32 @@
         var productId = $btn.data('product_id');
         var origText  = $btn.text();
 
+        // 數量下拉只在該商品的單次兌換上限（max_qty）大於 1 時才會渲染（見
+        // twshop_render_points_redeemable_products_section()），找不到就預設 1 個，
+        // 跟改版前行為一致。用 data-product_id 對應，因為同一頁可能同時列出多個可兌換商品。
+        var $qtySelect = $btn.siblings('.twshop-redeem-qty-select[data-product_id="' + productId + '"]');
+        var qty = $qtySelect.length ? parseInt($qtySelect.val(), 10) : 1;
+        if (!qty || qty <= 0) qty = 1;
+
         $btn.text('兌換中...').prop('disabled', true);
+        $qtySelect.prop('disabled', true);
 
         $.post(twshopData.ajaxUrl, {
             action:       'twshop_redeem_points_product',
             product_id:   productId,
+            qty:          qty,
             twshop_nonce: twshopData.nonce
         }, function (response) {
             if (response.success) {
                 location.reload();
             } else {
                 $btn.text(origText).prop('disabled', false);
+                $qtySelect.prop('disabled', false);
                 alert((response.data && response.data.message) || '兌換失敗，請重新整理頁面後再試。');
             }
         }).fail(function () {
             $btn.text(origText).prop('disabled', false);
+            $qtySelect.prop('disabled', false);
             alert('兌換失敗，請重新整理頁面後再試。');
         });
     });
