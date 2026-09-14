@@ -349,12 +349,17 @@ function twshop_auto_manage_gifts_and_addons( $cart_obj ) {
  * 也加了以小時為顆粒度的時間區段，讓有排程起訖時間的規則至少在一小時內會反映到快取（此快取沒有其他
  * 會隨時間自動失效的機制，只靠 WC 商品版本號變動或滿 30 天才會重算，不加時間因子的話，排程規則的
  * 起訖時刻可能要等到有其他商品被儲存、間接刷新版本號才會生效，等待時間不可預期）。
+ *
+ * v25.8.33 加入規則內容的雜湊值：新增/修改/刪除任何一筆折扣規則都會讓這裡的雜湊值改變，使快取
+ * 立即失效，不用再等到整點。跟 $cart_total 那種連續值不同，規則整體內容是離散、低頻異動（管理員
+ * 手動操作才會變），不會有 transient 內部資料量無限增長的風險，所以可以直接整包納入 key。
  */
 function twshop_add_discount_context_to_variation_price_hash( $price_hash ) {
     $user_roles = is_user_logged_in() ? wp_get_current_user()->roles : array( 'customer' );
     sort( $user_roles );
     $price_hash['twshop_roles'] = $user_roles;
     $price_hash['twshop_hour']  = current_time( 'Y-m-d H' );
+    $price_hash['twshop_rules'] = md5( wp_json_encode( twshop_get_rules() ) );
     return $price_hash;
 }
 
