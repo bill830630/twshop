@@ -121,11 +121,6 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                     <label>結束 <input type="text" class="twshop-datetime-picker" name="end_time" value="<?php echo esc_attr( $e_time ); ?>" placeholder="不限" /></label>
                     <a href="#" class="twshop-clear-datetime" title="清除開始與結束時間">清除</a>
                 </span>
-                <label class="twshop-switch rule-stack-wrap" title="開啟後，排序在這條規則後面的同類規則不會再套用">
-                    <input type="checkbox" class="twshop-rule-stack-toggle" name="stack_exclusive" value="yes" <?php checked( $stack_exclusive, 'yes' ); ?> />
-                    <span class="twshop-switch-slider" aria-hidden="true"></span>
-                    <span class="twshop-switch-text">不與其他同類自動折扣疊加</span>
-                </label>
                 <label class="twshop-switch">
                     <input type="checkbox" class="twshop-rule-enabled-toggle" name="enabled" value="yes" <?php checked( $enabled, 'yes' ); ?> />
                     <span class="twshop-switch-slider" aria-hidden="true"></span>
@@ -269,8 +264,11 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                     <button type="button" class="button twshop-duplicate-rule" <?php disabled( '' === $r_id ); ?> title="<?php echo '' === $r_id ? '請先儲存規則' : '複製一份（預設停用）'; ?>">複製規則</button>
                     <button type="button" class="button remove-rule-row" style="color:#b32d2e; border-color:#b32d2e;">刪除規則</button>
                 </span>
-                <span style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <span style="display:flex; gap:10px 14px; align-items:center; flex-wrap:wrap;">
                     <span class="twshop-rule-status twshop-rule-footer-status" aria-live="polite"></span>
+                    <label class="rule-stack-wrap" style="font-weight:normal;" title="勾選後，排序在這條規則後面的同類折扣規則不會再套用">
+                        <input type="checkbox" name="stack_exclusive" value="yes" <?php checked( $stack_exclusive, 'yes' ); ?> /> 不與同類折扣疊加
+                    </label>
                     <button type="submit" class="button button-primary save-rule-btn">儲存規則</button>
                 </span>
             </div>
@@ -480,7 +478,7 @@ function twshop_ajax_delete_rule() {
 }
 
 /**
- * 批次啟用/停用/刪除多筆規則，以及卡片標題列「不疊加」切換鈕（stack_on/stack_off）與
+ * 批次啟用/停用/刪除多筆規則，以及卡片標題列啟用切換鈕（enable/disable）與
  * 開始/結束時間（schedule）的立即存檔。
  * 刪除時比照 twshop_ajax_delete_rule()，一併清理該規則的使用次數 option／user meta，
  * 避免又留下孤兒資料（兩處刪除邏輯刻意保持一致）。
@@ -490,7 +488,7 @@ function twshop_ajax_batch_update_rules() {
     check_ajax_referer( 'twshop_admin_action', 'twshop_nonce' );
 
     $action_type = sanitize_text_field( wp_unslash( $_POST['action_type'] ?? '' ) );
-    if ( ! in_array( $action_type, array( 'enable', 'disable', 'delete', 'stack_on', 'stack_off', 'schedule' ), true ) ) {
+    if ( ! in_array( $action_type, array( 'enable', 'disable', 'delete', 'schedule' ), true ) ) {
         wp_send_json_error( array( 'msg' => '不明的批次操作。' ) );
     }
     $rule_ids = array_map( 'sanitize_text_field', wp_unslash( (array) ( $_POST['rule_ids'] ?? array() ) ) );
@@ -528,12 +526,10 @@ function twshop_ajax_batch_update_rules() {
         }
         update_option( 'wc_discount_rules_settings', array_values( $rules ) );
     } else {
-        $is_stack = in_array( $action_type, array( 'stack_on', 'stack_off' ), true );
-        $field    = $is_stack ? 'stack_exclusive' : 'enabled';
-        $value    = in_array( $action_type, array( 'enable', 'stack_on' ), true ) ? 'yes' : 'no';
+        $new_enabled = ( 'enable' === $action_type ) ? 'yes' : 'no';
         foreach ( $rules as $k => $r ) {
             if ( in_array( $r['rule_id'], $rule_ids, true ) ) {
-                $rules[ $k ][ $field ] = $value;
+                $rules[ $k ]['enabled'] = $new_enabled;
             }
         }
         update_option( 'wc_discount_rules_settings', $rules );

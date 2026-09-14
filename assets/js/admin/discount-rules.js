@@ -156,7 +156,7 @@ jQuery(document).ready(function($) {
         $card.attr('data-rule-enabled', isEnabled ? 'yes' : 'no');
     }
 
-    // 標題列的切換鈕（啟用、不疊加）：已儲存的規則切換後立刻存檔（只改這一個欄位，不會連帶送出
+    // 標題列的啟用切換鈕：已儲存的規則切換後立刻存檔（只改這一個欄位，不會連帶送出
     // 卡片裡其他未儲存的修改）；還沒存過的新規則沒有 rule_id，維持跟著「儲存規則」一起送出。
     function saveHeaderToggle($toggle, onType, offType, onMsg, offMsg, applyLook) {
         var $card = $toggle.closest('.twshop-rule-card');
@@ -214,9 +214,7 @@ jQuery(document).ready(function($) {
     $container.on('change', '.twshop-rule-enabled-toggle', function() {
         saveHeaderToggle($(this), 'enable', 'disable', '✓ 已啟用', '✓ 已停用', applyEnabledLook);
     });
-    $container.on('change', '.twshop-rule-stack-toggle', function() {
-        saveHeaderToggle($(this), 'stack_on', 'stack_off', '✓ 已設為不疊加', '✓ 已取消不疊加', null);
-    });
+
 
     function openAndScrollTo($card, focusSelector) {
         $card.find('.twshop-card-body').show();
