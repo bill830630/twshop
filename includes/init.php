@@ -178,6 +178,7 @@ function twshop_membership_init() {
     // ── 折扣規則、贈品與加購 ──────────────────────────────────────────────
     if ( twshop_module_enabled( 'discount_rules' ) ) {
         add_action( 'wp_ajax_twshop_save_rule', 'twshop_ajax_save_rule' );
+        add_action( 'wp_ajax_twshop_duplicate_rule', 'twshop_ajax_duplicate_rule' );
         add_action( 'wp_ajax_twshop_delete_rule', 'twshop_ajax_delete_rule' );
         add_action( 'wp_ajax_twshop_reorder_rules', 'twshop_ajax_reorder_rules' );
         add_action( 'wp_ajax_twshop_batch_update_rules', 'twshop_ajax_batch_update_rules' );

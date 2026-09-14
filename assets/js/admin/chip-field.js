@@ -67,6 +67,12 @@
         });
     });
 
+    // 動態插入的欄位（例如 AJAX 複製出來的規則卡片）用這個事件重繪已選項目
+    $(document).on('twshop-chip-refresh', '.twshop-chip-field', function(e){
+        e.stopPropagation();
+        renderChipsFor($(this));
+    });
+
     jQuery(document).ready(function($){
         $('.twshop-chip-field').each(function(){ renderChipsFor($(this)); });
         $('.twshop-condition-type').trigger('change');
