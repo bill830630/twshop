@@ -139,11 +139,11 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
         <?php wp_nonce_field( 'twshop_admin_action', 'twshop_nonce' ); ?>
 
         <div class="twshop-card-header" style="padding:15px; background:#f7f7f7; cursor:pointer; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; font-weight:bold; border-bottom:1px solid #eee;">
-            <span style="display:flex; align-items:center; flex-wrap:wrap; gap:8px;">
+            <span style="display:flex; align-items:center; flex-wrap:wrap; gap:8px; flex:1 1 320px;">
                 <input type="checkbox" class="twshop-rule-select" title="選取以進行批次操作" />
                 <span class="drag-handle" style="cursor:move; color:#999;" title="拖曳排序"><?php echo twshop_get_account_tab_icon_svg( 'grip-vertical' ); ?></span>
                 <span class="twshop-rule-priority" title="優先順序：越前面越先套用"></span>
-                <span class="rule-title-display"><?php echo $name ? esc_html($name) : '新規則'; ?></span>
+                <input type="text" name="name" class="twshop-rule-name-input" value="<?php echo esc_attr( $name ); ?>" placeholder="規則名稱（必填）" aria-label="規則名稱" required />
                 <span class="twshop-badge twshop-badge--warn twshop-rule-dirty-badge" style="display:none;">未儲存</span>
             </span>
             <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
@@ -175,7 +175,6 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                         <option value="tiered_cart" <?php selected($type, 'tiered_cart'); ?>>階梯式訂單折扣 (多門檻)</option>
                     </select>
                 </div>
-                <div style="flex:1; min-width:200px;"><label style="<?php echo $label_style; ?>">規則名稱</label><input type="text" name="name" value="<?php echo esc_attr( $name ); ?>" style="width:100%;" required /></div>
                 <div style="flex:1; min-width:150px;"><label style="<?php echo $label_style; ?>">套用對象</label><select name="role" style="width:100%;"><option value="all" <?php selected($role, 'all'); ?>>所有顧客</option><?php foreach($tiers as $tier): ?><option value="<?php echo esc_attr($tier['slug']); ?>" <?php selected($role, $tier['slug']); ?>><?php echo esc_html($tier['name']); ?></option><?php endforeach; ?></select></div>
             </div>
 

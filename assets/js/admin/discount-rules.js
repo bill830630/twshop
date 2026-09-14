@@ -146,6 +146,10 @@ jQuery(document).ready(function($) {
     }
 
     $container.on('change', '.twshop-rule-type', function() { applyTypeLayout($(this).closest('.twshop-rule-form')); });
+    // 名稱欄在標題列，搜尋篩選依 data-rule-name 比對，打字時同步更新
+    $container.on('input', '.twshop-rule-name-input', function() {
+        $(this).closest('.twshop-rule-form').attr('data-rule-name', $(this).val());
+    });
     $container.on('input change', '.twshop-rule-value', function() { updateValueHint($(this).closest('.twshop-rule-form')); });
     $container.on('input change', '.twshop-rule-min-amount', function() { updateLogicVisibility($(this).closest('.twshop-rule-form')); });
     $container.on('change', '.twshop-condition-type', function() { updateLogicVisibility($(this).closest('.twshop-rule-form')); });
@@ -236,7 +240,7 @@ jQuery(document).ready(function($) {
         renumber();
         setDirty($newRow, true);
         dirtyTrackingOn = true;
-        openAndScrollTo($newRow, '.twshop-rule-type');
+        openAndScrollTo($newRow, '.twshop-rule-name-input');
     });
 
     // ── 收合 ─────────────────────────────────────────────────
@@ -255,9 +259,7 @@ jQuery(document).ready(function($) {
             .done(function(res) {
                 if (res && res.success) {
                     $form.find('input[name="rule_id"]').val(res.data.rule_id);
-                    var name = $form.find('input[name="name"]').val();
-                    $form.find('.rule-title-display').text(name ? name : '新規則');
-                    $form.attr('data-rule-name', name).attr('data-rule-type', $form.find('select[name="type"]').val());
+                    $form.attr('data-rule-type', $form.find('select[name="type"]').val());
                     $form.find('.twshop-duplicate-rule').prop('disabled', false).attr('title', '複製一份（預設停用）');
                     setDirty($form, false);
                     showSaveStatus($form, 'success', '✓ 已儲存');
@@ -291,7 +293,7 @@ jQuery(document).ready(function($) {
                 renumber();
                 dirtyTrackingOn = true;
                 showCardStatus($copy, 'success', '已複製（預設停用，確認後再啟用）');
-                openAndScrollTo($copy, 'input[name="name"]');
+                openAndScrollTo($copy, '.twshop-rule-name-input');
             })
             .fail(function() { showCardStatus($form, 'error', '複製失敗，請檢查網路連線後重試'); })
             .always(function() { $btn.prop('disabled', false); });
