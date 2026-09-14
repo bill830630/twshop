@@ -8,6 +8,12 @@ jQuery(document).ready(function($) {
     function initUI() {
         $('.twshop-datetime-picker').flatpickr({ enableTime: true, time_24hr: true, dateFormat: "Y-m-d H:i" });
 
+        // 讓「新增規則表單」複製出來的 wc-product-search 欄位（指定商品／限制條件-商品）
+        // 也套用 selectWoo：這個事件只在頁面載入當下自動觸發一次，動態插入的新 <select>
+        // 不會自動被接管。wc-enhanced-select.js 內部用 :not(.enhanced) 過濾已初始化過的
+        // 元素，重複觸發對既有欄位無副作用。
+        $(document.body).trigger('wc-enhanced-select-init');
+
         $('.twshop-rule-type').off('change').on('change', function(){
             var type = $(this).val();
             var $card = $(this).closest('.twshop-rule-card');

@@ -672,6 +672,21 @@ function twshop_normalize_redeemable_entry( $row ) {
 }
 
 /**
+ * 兌換清單單筆項目的顯示名稱（後台編輯 UI 用，見 twshop_render_redeemable_products_field()）。
+ * 商品/分類/標籤已刪除時回傳明確提示文字，不讓該筆從清單裡靜默消失——管理員才知道
+ * 有一筆設定失效需要處理，而不是以為清單本來就只有這麼多筆。
+ */
+function twshop_get_redeemable_entry_display_name( $entry ) {
+    if ( 'product' === $entry['type'] ) {
+        $product = wc_get_product( $entry['id'] );
+        return $product ? $product->get_name() : ( '#' . $entry['id'] . '（商品已不存在）' );
+    }
+    $taxonomy = 'category' === $entry['type'] ? 'product_cat' : 'product_tag';
+    $term = get_term( $entry['id'], $taxonomy );
+    return ( $term && ! is_wp_error( $term ) ) ? $term->name : ( '#' . $entry['id'] . '（項目已不存在）' );
+}
+
+/**
  * 依商品目前售價換算兌換所需點數，套用跟現金折抵同一個「點數折抵匯率」
  * （wc_points_redemption_rate，幾點折抵 1 元）——分類/標籤展開出來的商品各自價格不同，
  * 沒有理由全部收同一個點數，用這個站台既有的點數/金額換算比例，讓兌換成本跟著商品
@@ -1088,12 +1103,27 @@ function twshop_ajax_redeem_points_product() {
         wp_send_json_error( array( 'message' => twshop_points_term() . '不足，無法兌換' ) );
     }
 
-    $added = WC()->cart->add_to_cart( $product_id, 1, 0, array(), array(
-        'twshop_points_redeem_product_id' => $product_id,
-        'twshop_points_redeem_cost'       => $cost,
-    ) );
+    // 兌換商品本身被 twshop_restrict_purchase_for_redeem_and_gift_products()
+    // （includes/helpers.php）設成不可直接購買，這裡是唯一允許把它加入購物車的合法管道，
+    // 用 bypass 旗標跳過那道限制，否則 add_to_cart() 會自己擋自己。
+    twshop_bypass_purchase_restriction( true );
+    try {
+        $added = WC()->cart->add_to_cart( $product_id, 1, 0, array(), array(
+            'twshop_points_redeem_product_id' => $product_id,
+            'twshop_points_redeem_cost'       => $cost,
+        ) );
+    } finally {
+        twshop_bypass_purchase_restriction( false );
+    }
     if ( ! $added ) {
-        wp_send_json_error( array( 'message' => '加入購物車失敗，商品可能已下架或缺貨' ) );
+        // WC()->cart->add_to_cart() 失敗時（缺貨、可變商品沒給 variation_id 等）內部會用
+        // wc_add_notice() 寫一則具體原因到 WC session 的通知佇列、自己只回傳 false，不會拋出
+        // 例外讓這裡接到。直接讀那則通知取代寫死的「商品可能已下架或缺貨」，訊息才會對得上
+        // 真正的原因（例如可變商品未選規格），而不是每次失敗都顯示同一句不一定正確的猜測。
+        $notices = wc_get_notices( 'error' );
+        $message = ! empty( $notices ) ? wp_strip_all_tags( end( $notices )['notice'] ) : ( '加入購物車失敗，商品可能已下架或缺貨' );
+        wc_clear_notices(); // 這則通知是給這次 AJAX 回應用的，不清掉會在顧客下次刷新頁面時意外冒出來
+        wp_send_json_error( array( 'message' => $message ) );
     }
 
     wp_send_json_success( array( 'message' => '兌換成功' ) );

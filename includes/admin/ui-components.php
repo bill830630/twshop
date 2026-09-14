@@ -42,6 +42,19 @@ function twshop_admin_external_scripts($hook) {
 
     if ( $on_page ) {
         wp_enqueue_script( 'jquery-ui-sortable' );
+        // AJAX 商品搜尋（wc-product-search class + selectWoo）：WooCommerce 核心已經在
+        // admin_init 註冊/localize 過這支腳本（含 ajax_url、search-products nonce），這裡
+        // 只需要 enqueue，不用自己重新註冊，見 twshop_render_product_search_field()。
+        wp_enqueue_script( 'wc-enhanced-select' );
+        // selectWoo 的外觀樣式（.select2-container 等）不是獨立的樣式表，是編譯進 WooCommerce
+        // 自己的 assets/css/admin.css（handle woocommerce_admin_styles）裡；核心只在
+        // in_array($screen_id, wc_get_screen_ids()) 成立時才會 enqueue 這支樣式，twshop 的頁面
+        // 不在那份清單裡。漏掉這行不會有任何錯誤訊息，只會讓搜尋框跟下拉選單變成無樣式的
+        // 陽春 HTML 疊在一起（實測回報過的症狀）。這個 handle 在 WC 核心的 admin_styles()
+        // 裡是無條件 wp_register_style()（只有 enqueue 那步被螢幕白名單擋住），任何時候呼叫
+        // wp_enqueue_style() 用這個 handle 都找得到，不需要在意兩邊 admin_enqueue_scripts
+        // callback 的先後順序。
+        wp_enqueue_style( 'woocommerce_admin_styles' );
         // flatpickr 改從外掛自帶的 assets/vendor/flatpickr/ 本地載入（版本鎖 4.6.13），
         // 不再依賴 cdn.jsdelivr.net——商業外掛不應帶第三方 CDN 相依，且原本 CSS 的 CDN URL
         // 還沒鎖版本（JS 已鎖 4.6.13），改本地後 CSS/JS 版本一併固定。
@@ -199,6 +212,59 @@ function twshop_render_chip_field( $name, $selected_values, $options ) {
             <?php endforeach; ?>
         </select>
     </div>
+    <?php
+    return ob_get_clean();
+}
+
+/**
+ * AJAX 商品搜尋欄位：重用 WooCommerce 核心的 wc-product-search（selectWoo +
+ * woocommerce_json_search_products AJAX action），取代「一次性撈最多 200 筆商品塞進
+ * <select>」的陽春下拉——商品多的店找不到、超過 200 筆的商品選不到，這裡搜尋不受限。
+ * 只需要把「目前已選的商品」解析成 <option selected>，其餘商品由使用者輸入時即時搜尋，
+ * 不需要預先把全站商品塞進頁面。核心端的 AJAX handler、nonce（action 固定是
+ * `search-products`）、`wc_enhanced_select_params` 的 localize 都已經在 admin_init
+ * 階段跑過，這裡不需要重新註冊或 wp_localize_script，只要頁面上有 enqueue
+ * `wc-enhanced-select`（見 twshop_admin_external_scripts()）就能用。
+ *
+ * @param string $name           <select> 的 name 屬性（多選時自動補 []）
+ * @param array  $selected_ids   目前已選的商品 ID
+ * @param bool   $multiple       是否為多選
+ * @param string $placeholder    搜尋框 placeholder
+ * @param array  $exclude_types  要從搜尋結果排除的商品類型（例如 array('variable')）。
+ *                                用途：呼叫端會直接把選到的商品 ID 拿去
+ *                                WC()->cart->add_to_cart( $id, 1, 0, ... )（variation_id 固定
+ *                                傳 0），可變商品（父商品）沒有指定規格時核心會丟例外、
+ *                                add_to_cart() 回傳 false——排除可變商品讓管理員從源頭就選不到，
+ *                                不要等前台顧客實際操作才發現失敗。只有「限制條件」這類純粹拿
+ *                                商品 ID 做比對、不會直接加入購物車的欄位不需要排除，見呼叫端。
+ */
+function twshop_render_product_search_field( $name, $selected_ids, $multiple = false, $placeholder = '搜尋商品名稱或商品編號…', $exclude_types = array() ) {
+    $selected_ids = array_filter( array_map( 'absint', (array) $selected_ids ) );
+    $exclude_types = array_filter( array_map( 'sanitize_key', (array) $exclude_types ) );
+    ob_start();
+    ?>
+    <select
+        name="<?php echo esc_attr( $name . ( $multiple ? '[]' : '' ) ); ?>"
+        class="wc-product-search"
+        style="width:100%;"
+        data-action="woocommerce_json_search_products"
+        data-placeholder="<?php echo esc_attr( $placeholder ); ?>"
+        data-allow_clear="true"
+        <?php if ( ! empty( $exclude_types ) ) : ?>
+        data-exclude_type="<?php echo esc_attr( implode( ',', $exclude_types ) ); ?>"
+        <?php endif; ?>
+        <?php echo $multiple ? 'multiple="multiple"' : ''; ?>
+    >
+        <?php if ( ! $multiple ) : ?>
+            <option value="">— 請選擇商品 —</option>
+        <?php endif; ?>
+        <?php foreach ( $selected_ids as $pid ) :
+            $product = wc_get_product( $pid );
+            if ( ! $product ) continue;
+        ?>
+            <option value="<?php echo esc_attr( $pid ); ?>" selected><?php echo esc_html( $product->get_name() ); ?></option>
+        <?php endforeach; ?>
+    </select>
     <?php
     return ob_get_clean();
 }

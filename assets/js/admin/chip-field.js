@@ -58,6 +58,11 @@
             if (!isActive) {
                 $wrap.find('.twshop-chip-source option:selected').prop('selected', false);
                 $wrap.find('.twshop-chip-field').each(function(){ renderChipsFor($(this)); });
+                // 商品限制條件改用 AJAX 搜尋（wc-product-search，見 twshop_render_product_search_field()）
+                // 後新增：selectWoo 多選一樣要 .trigger('change') 才會連動更新畫面顯示，直接改
+                // DOM option 屬性不會反映在 selectWoo 的 UI 上。沒有 .wc-product-search 元素的
+                // wrap（分類/標籤）這行查無元素、無副作用。
+                $wrap.find('select.wc-product-search').val(null).trigger('change');
             }
         });
     });

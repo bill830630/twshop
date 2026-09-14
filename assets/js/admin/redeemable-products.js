@@ -9,27 +9,54 @@
  * 貴的商品賤賣，改成讀取端依各商品售價自動換算（twshop_calc_redeem_cost_from_price()，
  * includes/modules/points-engine.php）。選「分類」/「標籤」時「所需點數」欄位隱藏、
  * 送出的 points_cost 固定是 0（後端 sanitize 對這兩種 type 本來就不驗證這個值）。
+ * v25.8.27：
+ *   1. 「單一商品」改用 twshop_render_product_search_field()（AJAX 搜尋 wc-product-search，
+ *      見 includes/admin/ui-components.php），取代原本一次性撈最多 200 筆商品塞進 <select>
+ *      的陽春下拉。每筆項目的顯示名稱改由 PHP 端在 twshop_get_redeemable_entry_display_name()
+ *      解析好、直接存進隱藏欄位 JSON 的 name 鍵——AJAX 搜尋模式下 <select> 不會預先塞滿
+ *      選項，不能再像以前那樣查 DOM 裡的 <option> 文字。
+ *   2. 清單渲染改用外掛既有的 .twshop-chip 共用樣式（chip-field.js／twshop-admin.css），
+ *      跟其他頁面視覺一致；改用 jQuery 節點 + .text() 組裝，不再是字串拼接 innerHTML
+ *      （商品名稱含 <、& 等字元時不會被誤判成 HTML）。
+ *   3. 已加入項目（僅 type === 'product'）的點數可以點擊就地編輯，不用先移除再重新加入。
  */
 jQuery(document).ready(function($){
     var TYPE_LABEL = { category: '分類', tag: '標籤' };
 
-    function renderRedeemProducts($wrap) {
+    function readList($wrap) {
         var $input = $wrap.find('.redeem-products-json');
-        var arr = JSON.parse($input.val() || '[]');
-        var html = '';
+        return JSON.parse($input.val() || '[]');
+    }
+
+    function writeList($wrap, arr) {
+        $wrap.find('.redeem-products-json').val(JSON.stringify(arr));
+    }
+
+    function renderRedeemProducts($wrap) {
+        var arr = readList($wrap);
+        var $list = $wrap.find('.redeem-products-list').empty();
+
         arr.forEach(function(item, i) {
-            var label, costText;
-            if (item.type === 'category' || item.type === 'tag') {
-                var $opt = $wrap.find('.redeem-' + item.type + '-add-select option[value="' + item.id + '"]');
-                label = '[' + TYPE_LABEL[item.type] + '] ' + ($opt.text() || ('#' + item.id));
-                costText = '依售價自動換算';
+            var label = item.name || (TYPE_LABEL[item.type] ? ('[' + TYPE_LABEL[item.type] + '] #' + item.id) : ('#' + item.id));
+
+            var $chip = $('<span class="twshop-chip"></span>');
+            $chip.append($('<span></span>').text(label));
+
+            if (item.type === 'product') {
+                $chip.append(
+                    $('<span class="redeem-chip-cost" tabindex="0" title="點擊修改所需點數"></span>')
+                        .attr('data-idx', i)
+                        .text(item.points_cost + ' 點')
+                );
             } else {
-                label = $wrap.find('.redeem-product-add-select option[value="' + item.id + '"]').text() || ('商品 #' + item.id);
-                costText = item.points_cost + ' 點';
+                $chip.append($('<span class="redeem-chip-cost-note"></span>').text('依售價自動換算'));
             }
-            html += '<span style="display:inline-block; background:#fff; border:1px solid #ccc; padding:4px 8px; border-radius:4px; font-size:12px; margin:4px 6px 4px 0;">' + label + '：' + costText + '<a href="#" class="remove-redeem-product-btn" data-idx="' + i + '" style="color:red; text-decoration:none; margin-left:8px; font-weight:bold;">[移除]</a></span>';
+
+            $chip.append(
+                $('<a href="#" class="twshop-chip-remove remove-redeem-product-btn">&times;</a>').attr('data-idx', i)
+            );
+            $list.append($chip);
         });
-        $wrap.find('.redeem-products-list').html(html);
     }
     $('.twshop-redeem-products-section').each(function(){ renderRedeemProducts($(this)); });
 
@@ -42,7 +69,10 @@ jQuery(document).ready(function($){
     $(document).on('change', '.redeem-item-type-select', function(){
         var $wrap = $(this).closest('.twshop-redeem-products-section');
         var type = $(this).val();
-        $wrap.find('.redeem-product-add-select').toggle(type === 'product');
+        // 「單一商品」欄位改切換外層 wrapper，不要直接切換 <select> 本身——selectWoo 會在
+        // 原本的 <select> 旁邊插入獨立的 .select2-container 顯示 UI，對 <select> 呼叫
+        // .toggle() 不會連動隱藏那個容器（twshop-tw-postcode.js 已踩過同一種陷阱）。
+        $wrap.find('.redeem-product-add-select-wrap').toggle(type === 'product');
         $wrap.find('.redeem-category-add-select').toggle(type === 'category');
         $wrap.find('.redeem-tag-add-select').toggle(type === 'tag');
         togglePointsField($wrap, type);
@@ -51,9 +81,12 @@ jQuery(document).ready(function($){
     $(document).on('click', '.add-redeem-product-btn', function(){
         var $wrap = $(this).closest('.twshop-redeem-products-section');
         var type = $wrap.find('.redeem-item-type-select').val() || 'product';
-        var $select = $wrap.find('.redeem-' + type + '-add-select');
+        var $select = type === 'product'
+            ? $wrap.find('.redeem-product-add-select-wrap select.wc-product-search')
+            : $wrap.find('.redeem-' + type + '-add-select');
         var id = $select.val();
         if (!id) { alert('請選擇項目'); return; }
+        var name = $select.find('option:selected').text() || ('#' + id);
 
         var pts = 0;
         if (type === 'product') {
@@ -61,23 +94,70 @@ jQuery(document).ready(function($){
             if (!pts || pts <= 0) { alert('請輸入所需點數'); return; }
         }
 
-        var $input = $wrap.find('.redeem-products-json');
-        var arr = JSON.parse($input.val() || '[]');
+        var arr = readList($wrap);
         if (arr.some(function(it){ return it.type === type && String(it.id) === String(id); })) { alert('此項目已在兌換清單中'); return; }
-        arr.push({ type: type, id: parseInt(id, 10), points_cost: type === 'product' ? parseInt(pts, 10) : 0 });
-        $input.val(JSON.stringify(arr));
+        arr.push({ type: type, id: parseInt(id, 10), name: name, points_cost: type === 'product' ? parseInt(pts, 10) : 0 });
+        writeList($wrap, arr);
         renderRedeemProducts($wrap);
         $wrap.find('.redeem-product-add-points').val('');
+
+        if (type === 'product') {
+            // selectWoo 需要 .trigger('change') 畫面才會同步清空，直接改 .val() 沒有用。
+            $select.val(null).trigger('change');
+        } else {
+            $select.val('');
+        }
     });
 
     $(document).on('click', '.remove-redeem-product-btn', function(e){
         e.preventDefault();
         var $wrap = $(this).closest('.twshop-redeem-products-section');
         var idx = $(this).data('idx');
-        var $input = $wrap.find('.redeem-products-json');
-        var arr = JSON.parse($input.val() || '[]');
+        var arr = readList($wrap);
         arr.splice(idx, 1);
-        $input.val(JSON.stringify(arr));
+        writeList($wrap, arr);
         renderRedeemProducts($wrap);
+    });
+
+    // 就地編輯所需點數：點擊 chip 上的點數文字，原地換成數字輸入框，Enter/失焦寫回、Esc 取消。
+    $(document).on('click', '.redeem-chip-cost', function(){
+        var $span = $(this);
+        if ($span.find('input').length) return; // 已經在編輯中，不重複進入
+
+        var $wrap = $span.closest('.twshop-redeem-products-section');
+        var idx = $span.data('idx');
+        var current = parseInt($span.text(), 10) || 0;
+        var $inputEl = $('<input type="number" min="1" class="redeem-chip-cost-input">').val(current);
+        // 移除仍保有焦點的 <input>（無論是 Enter 提交後、還是 Esc 取消後的重新渲染）多半會讓
+        // 瀏覽器再補觸發一次 blur——沒有這個旗標擋，Esc 取消後緊接著的那次 blur 還是會呼叫
+        // commit() 把剛剛想取消的值寫回去，等於 Esc 完全沒作用。
+        var done = false;
+
+        function commit() {
+            if (done) return;
+            done = true;
+            var val = parseInt($inputEl.val(), 10);
+            if (val && val > 0) {
+                var arr = readList($wrap);
+                arr[idx].points_cost = val;
+                writeList($wrap, arr);
+            }
+            renderRedeemProducts($wrap);
+        }
+
+        function cancel() {
+            if (done) return;
+            done = true;
+            renderRedeemProducts($wrap);
+        }
+
+        $inputEl.on('blur', commit);
+        $inputEl.on('keydown', function(e){
+            if (e.key === 'Enter') { e.preventDefault(); commit(); }
+            if (e.key === 'Escape') { cancel(); }
+        });
+
+        $span.empty().append($inputEl);
+        $inputEl.trigger('focus').trigger('select');
     });
 });

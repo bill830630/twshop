@@ -315,35 +315,47 @@ function twshop_points_import_tab() {
  * 硬性統一成同一個點數等於讓貴的商品被賤賣，這兩種類型改成讀取端依各商品當下售價
  * 自動換算（twshop_calc_redeem_cost_from_price()），管理員不需要也不能為分類/標籤
  * 手動填點數，欄位切換邏輯見 assets/js/admin/redeemable-products.js。
+ *
+ * v25.8.27 起「單一商品」改用 twshop_render_product_search_field()（AJAX 搜尋，見
+ * includes/admin/ui-components.php）取代原本一次性撈最多 200 筆商品塞進 <select> 的
+ * 陽春下拉——商品多的店找不到、超過 200 筆的商品選不到。已加入清單的每筆項目改用
+ * twshop_get_redeemable_entry_display_name() 在伺服器端把名稱解析好、直接寫進隱藏欄位
+ * 的 JSON 裡（多一個 name 鍵，只給這裡渲染清單用，twshop_sanitize_points_redeemable_products()
+ * 存檔時只白名單挑 type/id/points_cost，name 會被自然忽略，不影響 option 本身的儲存格式）
+ * ——AJAX 搜尋模式下 <select> 不會預先塞滿選項，JS 端沒有 DOM 可以查商品名稱，必須由
+ * PHP 端先解析好。
  */
 function twshop_render_redeemable_products_field( $redeemable_products, $cat_options, $tag_options ) {
-    $products = wc_get_products( array( 'status' => 'publish', 'limit' => 200, 'orderby' => 'title', 'order' => 'ASC', 'return' => 'objects' ) );
-
     // 正規化成 {type, id, points_cost}：舊資料（升級前存的 {product_id, points_cost}，
     // 管理員還沒重新儲存過這一頁）也要能正常顯示，不能直接把 $redeemable_products
     // 原封不動印進隱藏欄位，否則 JS 端會讀不到 id 而整批消失。
     $normalized = array();
     foreach ( $redeemable_products as $row ) {
-        $normalized[] = twshop_normalize_redeemable_entry( $row );
+        $entry = twshop_normalize_redeemable_entry( $row );
+        $entry['name'] = twshop_get_redeemable_entry_display_name( $entry );
+        $normalized[] = $entry;
     }
 
     ob_start();
     ?>
     <div class="twshop-redeem-products-section">
         <input type="hidden" name="wc_points_redeemable_products" value="<?php echo esc_attr( wp_json_encode( $normalized ) ); ?>" class="redeem-products-json">
-        <div class="redeem-products-list" style="margin:10px 0;"></div>
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <div class="redeem-products-list twshop-chip-box"></div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
             <select class="redeem-item-type-select">
                 <option value="product">單一商品</option>
                 <option value="category">商品分類（整批加入）</option>
                 <option value="tag">商品標籤（整批加入）</option>
             </select>
-            <select class="redeem-product-add-select">
-                <option value="">選擇商品</option>
-                <?php foreach ( $products as $p ) : ?>
-                    <option value="<?php echo esc_attr( $p->get_id() ); ?>"><?php echo esc_html( $p->get_name() ); ?> (ID: <?php echo esc_html( $p->get_id() ); ?>)</option>
-                <?php endforeach; ?>
-            </select>
+            <span class="redeem-product-add-select-wrap" style="flex:1; min-width:220px;">
+                <?php // name 純粹是這支共用元件的必要參數，這顆 <select> 本身不是表單欄位
+                // （值只給 JS 讀取後推進 wc_points_redeemable_products 的 JSON，不直接送出），
+                // 沒有註冊對應的 option，即使被送出也會被 options.php 忽略，無副作用。
+                // 排除可變商品：twshop_ajax_redeem_points_product() 是直接
+                // WC()->cart->add_to_cart( $id, 1, 0, ... )（不含 variation_id），選到可變商品
+                // 的父商品會讓顧客兌換時必定失敗（WooCommerce 核心要求可變商品一定要指定規格）。
+                echo twshop_render_product_search_field( 'redeem_product_add_picker', array(), false, '搜尋商品名稱或商品編號…', array( 'variable' ) ); ?>
+            </span>
             <select class="redeem-category-add-select" style="display:none;">
                 <option value="">選擇商品分類</option>
                 <?php foreach ( $cat_options as $term_id => $name ) : ?>

@@ -294,6 +294,97 @@ function twshop_module_enabled( $module ) {
 }
 
 /**
+ * 內部旗標：twshop 自己呼叫 WC()->cart->add_to_cart() 把「兌換商品」／「贈品」加入購物車時，
+ * 用來暫時跳過 twshop_restrict_purchase_for_redeem_and_gift_products()（掛在
+ * woocommerce_is_purchasable）的自我阻擋——這兩者都是刻意把「原本不開放直接購買」的商品
+ * 加進購物車，不是顧客自己的一般購買流程。呼叫端務必用 try/finally 包住，確保就算
+ * add_to_cart() 拋例外也一定會重置，不會讓旗標卡在開啟狀態影響後續同一次請求裡的其他商品。
+ */
+function twshop_bypass_purchase_restriction( $active = null ) {
+    static $bypass = false;
+    if ( null !== $active ) {
+        $bypass = (bool) $active;
+    }
+    return $bypass;
+}
+
+/**
+ * 目前所有「不可直接購買」的商品 ID：已設定的點數兌換商品（含分類/標籤展開）＋所有
+ * 啟用中 free_gift 規則指定的贈品商品。只在對應模組（points／discount_rules）啟用時
+ * 收集，模組關閉時不擋任何商品。per-request static cache——twshop_resolve_redeemable_products()
+ * 本身完全沒有快取，每次呼叫可能觸發 wc_get_products()，商城列表頁對每個商品都重新算
+ * 一次會是嚴重的 N+1 查詢問題。
+ *
+ * 刻意只看「是否被設定」，不模擬購物車當下是否達標（不即時判斷 free_gift 規則的
+ * min_amount/時間區間/會員角色）——避免同一商品「購物車還沒到門檻能買、湊到門檻後
+ * 突然不能買」這種令人困惑的狀態，也避免在商城列表頁對每個商品都重新跑一次完整規則
+ * 有效性判斷的效能成本。
+ */
+function twshop_get_purchase_restricted_product_ids( $force_refresh = false ) {
+    static $ids_cache = null;
+    if ( $force_refresh ) $ids_cache = null;
+    if ( null === $ids_cache ) {
+        $ids = array();
+
+        if ( twshop_module_enabled( 'points' ) ) {
+            $list = get_option( 'wc_points_redeemable_products', array() );
+            if ( ! empty( $list ) && is_array( $list ) ) {
+                foreach ( twshop_resolve_redeemable_products( $list ) as $entry ) {
+                    $ids[] = $entry['product']->get_id();
+                }
+            }
+        }
+
+        if ( twshop_module_enabled( 'discount_rules' ) ) {
+            foreach ( twshop_get_rules() as $rule ) {
+                // 「缺 enabled 這個 key 視為啟用」的預設值方向比照
+                // twshop_is_discount_rule_valid_compute()（discount-engine.php）既有慣例，
+                // 給升級前沒有這個欄位的舊規則資料相容。
+                if ( 'free_gift' === ( $rule['type'] ?? '' )
+                    && ( $rule['enabled'] ?? 'yes' ) !== 'no'
+                    && ! empty( $rule['gift_product_id'] )
+                ) {
+                    $ids[] = (int) $rule['gift_product_id'];
+                }
+            }
+        }
+
+        $ids_cache = array_values( array_unique( array_map( 'intval', $ids ) ) );
+    }
+    return $ids_cache;
+}
+
+/**
+ * 商品被設定為「點數兌換商品」或啟用中的「贈品」規則指定商品時，擋掉顧客一般管道的直接
+ * 購買——商城列表頁的「加入購物車」會自動退化成「查看更多」連結（WooCommerce 核心
+ * WC_Product_Simple::add_to_cart_url()/add_to_cart_text() 既有邏輯）、商品詳情頁完全不
+ * 輸出加入購物車表單（single-product/add-to-cart/simple.php 開頭的
+ * `if ( ! $product->is_purchasable() ) return;`）。twshop 自己內部把這些商品加入購物車
+ * （兌換／自動贈品）都透過 twshop_bypass_purchase_restriction() 暫時跳過這裡，不受影響。
+ * 「加購品」（addon_product 型別）刻意不在此限——那本來就設計成可以單獨用正常價格購買，
+ * 只是滿足條件時能特價加購，跟兌換商品/贈品的語意不同。
+ */
+function twshop_restrict_purchase_for_redeem_and_gift_products( $purchasable, $product ) {
+    if ( ! $purchasable ) return $purchasable;
+    if ( twshop_bypass_purchase_restriction() ) return $purchasable;
+    if ( in_array( $product->get_id(), twshop_get_purchase_restricted_product_ids(), true ) ) return false;
+    return $purchasable;
+}
+
+/**
+ * 商品詳情頁的說明文字：is_purchasable() 為 false 時，simple.php 樣板完全不輸出加入購物車
+ * 表單（連庫存資訊都不顯示），沒有這行說明的話頁面看起來會像空白/壞掉，顧客不知道為什麼
+ * 不能買。掛在價格（priority 10）之後、加入購物車表單（priority 30）之前。兌換商品／贈品
+ * 兩種情況統一用同一句話，不特別區分，避免多一次查詢判斷是哪一種。
+ */
+function twshop_render_purchase_restricted_notice() {
+    global $product;
+    if ( ! $product instanceof WC_Product ) return;
+    if ( ! in_array( $product->get_id(), twshop_get_purchase_restricted_product_ids(), true ) ) return;
+    echo '<p class="twshop-purchase-restricted-notice">' . esc_html__( '此商品目前無法直接購買。', 'ultimate-ecommerce' ) . '</p>';
+}
+
+/**
  * 可開關模組的清單（label + 說明文字），供「系統設定 ▸ 模組開關」與「儀表板」共用，
  * 避免模組清單分散在兩處各自維護、改一邊忘了改另一邊。
  */

@@ -62,6 +62,15 @@ function twshop_membership_init() {
     // 判斷之後），見 includes/class-twshop-updater.php。
     TWSHOP_Updater::init();
 
+    // 點數兌換商品／贈品商品禁止顧客直接購買：跨 points／discount_rules 兩個模組共用，
+    // 刻意不綁在任一模組的 if 區塊內——比照「跨模組共用的 AJAX action 不應該只綁在單一
+    // 模組開關下」的既有教訓（見下方 twshop_ajax_refresh_components 註冊處），任一模組
+    // 關閉時另一模組的限制仍要正常運作。callback 內部（includes/helpers.php）已經用
+    // twshop_get_purchase_restricted_product_ids() 自行依模組開關決定要不要收集清單，
+    // 兩個模組都關閉時清單是空陣列，filter 恆等於無操作。
+    add_filter( 'woocommerce_is_purchasable', 'twshop_restrict_purchase_for_redeem_and_gift_products', 10, 2 );
+    add_action( 'woocommerce_single_product_summary', 'twshop_render_purchase_restricted_notice', 25 );
+
     // --- 後台選單 ---
     add_action( 'admin_menu', 'twshop_register_menus' );
     add_action( 'wp_dashboard_setup', 'twshop_register_dashboard_widget' );

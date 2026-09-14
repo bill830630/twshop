@@ -223,7 +223,17 @@ function twshop_auto_manage_gifts_and_addons( $cart_obj ) {
     // 執行新增與移除 (此動作可能會再次觸發 calculate_totals，因為被我們鎖住了所以安全)
     if ( !empty($gifts_to_add) || !empty($gifts_to_remove) ) {
         foreach($gifts_to_remove as $key) { WC()->cart->remove_cart_item($key); }
-        foreach($gifts_to_add as $gift) { WC()->cart->add_to_cart($gift['id'], 1, 0, array(), array('twshop_gift_rule_id' => $gift['rule_id'])); }
+        // 贈品本身被 twshop_restrict_purchase_for_redeem_and_gift_products()
+        // （includes/helpers.php）設成不可直接購買，這裡是唯一允許自動把它加入購物車的
+        // 合法管道，用 bypass 旗標跳過那道限制，否則 add_to_cart() 會自己擋自己。
+        foreach($gifts_to_add as $gift) {
+            twshop_bypass_purchase_restriction( true );
+            try {
+                WC()->cart->add_to_cart($gift['id'], 1, 0, array(), array('twshop_gift_rule_id' => $gift['rule_id']));
+            } finally {
+                twshop_bypass_purchase_restriction( false );
+            }
+        }
     }
 
     // 第二階段：買N送N（buy_x_get_y）——重用同一套「add_to_cart + cart_item_data 標記 + set_price(0)」

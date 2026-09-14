@@ -228,3 +228,10 @@ input:checked + .twshop-slider:before { transform:translateX(20px); }
    不管兩支樣式表載入順序為何，核心那條永遠贏，加寬完全沒生效。標記本身已拿掉
    small-text class（page-points.php），這裡改成唯一一條寬度規則，不用再打 specificity 仗。 */
 .redeem-product-add-points{ width:100px; padding:0 8px; }
+
+/* 點數兌換商品清單的 chip 就地編輯點數，見 twshop_render_redeemable_products_field()／
+   assets/js/admin/redeemable-products.js */
+.redeem-chip-cost{ cursor:pointer; text-decoration:underline dotted; }
+.redeem-chip-cost:hover{ color:#005177; }
+.redeem-chip-cost-input{ width:70px; }
+.redeem-chip-cost-note{ color:#72777c; font-style:italic; font-size:12px; }

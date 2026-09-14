@@ -19,8 +19,6 @@ function twshop_marketing_rules_tab() {
     $product_tags = get_terms( array( 'taxonomy' => 'product_tag', 'hide_empty' => false ) );
     if ( is_wp_error( $product_cats ) ) $product_cats = array();
     if ( is_wp_error( $product_tags ) ) $product_tags = array();
-    // 查一次商品清單給所有規則卡片共用，避免 N 筆規則各自在 twshop_get_rule_row_html() 內重複查詢。
-    $condition_products = wc_get_products( array( 'status' => 'publish', 'limit' => 200, 'orderby' => 'title', 'order' => 'ASC', 'return' => 'objects' ) );
 
     $addon_title      = twshop_option( 'wc_addon_section_title' );
     $addon_btn_add    = twshop_option( 'wc_addon_btn_add_text' );
@@ -80,11 +78,11 @@ function twshop_marketing_rules_tab() {
         </div>
 
         <div id="discount-repeater-container" style="margin-top:20px;">
-            <?php foreach ( $rules as $rule ) echo twshop_get_rule_row_html( $rule, $tiers, $product_cats, $product_tags, $condition_products ); ?>
+            <?php foreach ( $rules as $rule ) echo twshop_get_rule_row_html( $rule, $tiers, $product_cats, $product_tags ); ?>
         </div>
 
         <div id="discount-rule-template" style="display:none;">
-            <?php echo twshop_get_rule_row_html(array(), $tiers, $product_cats, $product_tags, $condition_products); ?>
+            <?php echo twshop_get_rule_row_html(array(), $tiers, $product_cats, $product_tags); ?>
         </div>
 
         <p><button type="button" class="button" id="add-rule-row">新增規則表單</button></p>
@@ -98,7 +96,7 @@ function twshop_marketing_rules_tab() {
     <?php
 }
 
-function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array(), $tags = array(), $condition_products = null ) {
+function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array(), $tags = array() ) {
     $r_id = $r['rule_id'] ?? ''; $name = $r['name'] ?? ''; $role = $r['role'] ?? 'all'; $type = $r['type'] ?? 'percent';
     $val = $r['value'] ?? ''; $gift_id = $r['gift_product_id'] ?? ''; $logic = $r['logic'] ?? 'and';
     $min = $r['min_amount'] ?? '';
@@ -124,14 +122,6 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
     $cond_cats     = ( $cond_type === 'category' ) ? $cond_values : array();
     $cond_tags     = ( $cond_type === 'tag' ) ? $cond_values : array();
 
-    // 呼叫端（twshop_marketing_rules_tab()）已把商品清單查一次共用給所有規則卡片；
-    // 保留 null 時自行查詢的 fallback，避免其他呼叫端（若有）漏傳參數時整段壞掉。
-    if ( null === $condition_products ) {
-        $condition_products = wc_get_products( array( 'status' => 'publish', 'limit' => 200, 'orderby' => 'title', 'order' => 'ASC', 'return' => 'objects' ) );
-    }
-
-    $product_options = array();
-    foreach ( $condition_products as $gp ) { $product_options[ $gp->get_id() ] = $gp->get_name() . ' (ID: ' . $gp->get_id() . ')'; }
     $cat_options = array();
     foreach ( $cats as $term ) { $cat_options[ $term->slug ] = $term->name; }
     $tag_options = array();
@@ -181,12 +171,12 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                 <div class="rule-value-wrap" style="flex:1; min-width:120px;"><label style="font-weight:bold; display:block; margin-bottom:5px;">折扣數值</label><input type="number" step="1" name="value" value="<?php echo esc_attr( $val ); ?>" style="width:100%;" /></div>
                 <div class="rule-gift-wrap" style="flex:1; min-width:150px; display:none;">
                     <label style="font-weight:bold; display:block; margin-bottom:5px;">指定商品 (贈品/加購品)</label>
-                    <select name="gift_product_id" style="width:100%;">
-                        <option value="">— 請選擇商品 —</option>
-                        <?php foreach ( $condition_products as $gp ) : ?>
-                            <option value="<?php echo esc_attr( $gp->get_id() ); ?>" <?php selected( $gift_id, $gp->get_id() ); ?>><?php echo esc_html( $gp->get_name() ); ?> (ID: <?php echo esc_html( $gp->get_id() ); ?>)</option>
-                        <?php endforeach; ?>
-                    </select>
+                    <?php // 排除可變商品：free_gift 型別是直接 WC()->cart->add_to_cart( $id, 1, 0, ... )
+                    // （不含 variation_id）自動加入購物車，選到可變商品的父商品會讓贈品必定加不進去
+                    // （核心要求可變商品一定要指定規格），且這段是掛在 woocommerce_before_calculate_totals，
+                    // 失敗時完全沒有任何錯誤訊息浮現，管理員很難發現。addon_product 型別雖然不是主動
+                    // 加入購物車，但同一個欄位語意是「指定商品」，一併排除避免混淆。
+                    echo twshop_render_product_search_field( 'gift_product_id', $gift_id ? array( $gift_id ) : array(), false, '— 請選擇商品 —', array( 'variable' ) ); ?>
                 </div>
                 <div class="rule-bxgy-wrap" style="flex:1; min-width:220px; display:none;">
                     <label style="font-weight:bold; display:block; margin-bottom:5px;">買N送N 數量設定</label>
@@ -251,7 +241,7 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                     </div>
                     <div class="condition-values-wrap condition-values-product" style="flex:2; min-width:220px; display:none;">
                         <label style="font-size:13px; display:block; margin-bottom:4px;">選擇商品 <span style="font-weight:normal; color:#888;">(可複選)</span></label>
-                        <?php echo twshop_render_chip_field( 'condition_values_product', $cond_products, $product_options ); ?>
+                        <?php echo twshop_render_product_search_field( 'condition_values_product', $cond_products, true, '搜尋商品名稱或商品編號…' ); ?>
                     </div>
                     <div class="condition-values-wrap condition-values-category" style="flex:2; min-width:220px; display:none;">
                         <label style="font-size:13px; display:block; margin-bottom:4px;">選擇商品分類 <span style="font-weight:normal; color:#888;">(可複選)</span></label>
