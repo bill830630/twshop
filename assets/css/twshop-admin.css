@@ -244,7 +244,6 @@ input:checked + .twshop-slider:before { transform:translateX(20px); }
 .twshop-rule-hint{ font-size:12px; color:#646970; }
 .twshop-rule-value-hint{ display:block; margin:4px 0 0; font-size:12px; color:#2271b1; }
 .twshop-rule-value-hint.is-warn{ color:#b32d2e; font-weight:600; }
-.twshop-rule-priority{ min-width:28px; padding:1px 6px; border-radius:10px; background:#e8f0fe; color:#2271b1; font-size:11px; text-align:center; }
 .twshop-rule-status{ font-size:12px; font-weight:600; }
 .twshop-rule-status:empty{ display:none; }
 .twshop-rule-status.is-success{ color:#166534; }
@@ -263,3 +262,14 @@ input:checked + .twshop-slider:before { transform:translateX(20px); }
 .twshop-switch-text{ min-width:2em; }
 /* 規則名稱輸入欄在卡片標題列（v25.8.42） */
 .twshop-rule-name-input{ flex:1 1 200px; min-width:160px; max-width:420px; font-weight:600; }
+/* 規則卡片標題列兩行排列（v25.8.44）：第一行名稱，第二行立即生效的時間與切換鈕 */
+.twshop-rule-card .twshop-card-header{ padding:12px 15px; background:#f7f7f7; cursor:pointer; border-bottom:1px solid #eee; display:flex; flex-direction:column; gap:10px; }
+.twshop-card-header-row{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+.twshop-rule-card .twshop-card-header .drag-handle{ cursor:move; color:#999; display:inline-flex; }
+.twshop-rule-card .twshop-card-header .twshop-card-toggle-icon{ margin-left:auto; display:inline-flex; }
+.twshop-card-header-controls{ justify-content:space-between; padding-left:52px; font-size:12px; }
+.twshop-rule-schedule{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; }
+.twshop-rule-schedule label{ font-weight:normal; display:inline-flex; align-items:center; gap:4px; }
+.twshop-rule-schedule input{ width:140px; }
+.twshop-card-header-switches{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; }
+@media (max-width: 782px){ .twshop-card-header-controls{ padding-left:0; } }

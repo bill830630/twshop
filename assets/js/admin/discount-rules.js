@@ -38,10 +38,10 @@ jQuery(document).ready(function($) {
     $container.on('input change', '.twshop-rule-form :input', function() {
         if (!dirtyTrackingOn || $(this).hasClass('twshop-rule-select')) return;
         // 已儲存規則的標題列切換鈕會立刻存檔，不算未儲存的修改
-        if (($(this).hasClass('twshop-rule-enabled-toggle') || $(this).hasClass('twshop-rule-stack-toggle')) && $(this).closest('.twshop-rule-form').find('input[name="rule_id"]').val()) return;
+        if ($(this).closest('.twshop-card-header-controls').length && $(this).closest('.twshop-rule-form').find('input[name="rule_id"]').val()) return;
         setDirty($(this).closest('.twshop-rule-form'), true);
     });
-    $container.on('click', '.twshop-chip-remove, .twshop-add-tier-row, .twshop-remove-tier-row, .twshop-clear-datetime', function() {
+    $container.on('click', '.twshop-chip-remove, .twshop-add-tier-row, .twshop-remove-tier-row', function() {
         if (dirtyTrackingOn) setDirty($(this).closest('.twshop-rule-form'), true);
     });
     window.addEventListener('beforeunload', function(e) {
@@ -49,13 +49,6 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         e.returnValue = '';
     });
-
-    // ── 優先順序編號 ─────────────────────────────────────────
-    function renumber() {
-        $container.children('.twshop-rule-form').each(function(i) {
-            $(this).find('.twshop-rule-priority').text('#' + (i + 1));
-        });
-    }
 
     // ── 數值欄單位與即時說明 ─────────────────────────────────
     function percentHint(raw) {
@@ -141,15 +134,12 @@ jQuery(document).ready(function($) {
         $cards.each(function() {
             var $card = $(this);
             applyTypeLayout($card);
+            rememberSavedSchedule($card);
             $card.find('.twshop-tier-row').each(function() { updateTierHint($(this)); });
         });
     }
 
     $container.on('change', '.twshop-rule-type', function() { applyTypeLayout($(this).closest('.twshop-rule-form')); });
-    // 名稱欄在標題列，搜尋篩選依 data-rule-name 比對，打字時同步更新
-    $container.on('input', '.twshop-rule-name-input', function() {
-        $(this).closest('.twshop-rule-form').attr('data-rule-name', $(this).val());
-    });
     $container.on('input change', '.twshop-rule-value', function() { updateValueHint($(this).closest('.twshop-rule-form')); });
     $container.on('input change', '.twshop-rule-min-amount', function() { updateLogicVisibility($(this).closest('.twshop-rule-form')); });
     $container.on('change', '.twshop-condition-type', function() { updateLogicVisibility($(this).closest('.twshop-rule-form')); });
@@ -191,6 +181,36 @@ jQuery(document).ready(function($) {
             .always(function() { $toggle.prop('disabled', false); });
     }
 
+    // 標題列的開始/結束時間：選好或清除後立即存檔（兩個欄位一起送，短延遲合併「清除時間」同時觸發的兩次變更）
+    function scheduleSave($card) {
+        clearTimeout($card.data('twshopScheduleTimer'));
+        $card.data('twshopScheduleTimer', setTimeout(function() {
+            var ruleId = $card.find('input[name="rule_id"]').val();
+            var start = $card.find('input[name="start_time"]').val();
+            var end = $card.find('input[name="end_time"]').val();
+            if (!ruleId) { setDirty($card, true); return; }
+            if (start && end && end <= start) { showCardStatus($card, 'error', '結束時間必須晚於開始時間'); return; }
+            if (start === $card.data('twshopSavedStart') && end === $card.data('twshopSavedEnd')) return;
+            $.post(twshopDiscountRules.ajaxUrl, { action: 'twshop_batch_update_rules', action_type: 'schedule', rule_ids: [ruleId], start_time: start, end_time: end, twshop_nonce: twshopAdminNonce })
+                .done(function(res) {
+                    if (res && res.success) {
+                        $card.data('twshopSavedStart', start).data('twshopSavedEnd', end);
+                        showCardStatus($card, 'success', (start || end) ? '✓ 已更新時間' : '✓ 已清除時間');
+                    } else {
+                        showCardStatus($card, 'error', ajaxErrorMsg(res, '時間儲存失敗'));
+                    }
+                })
+                .fail(function() { showCardStatus($card, 'error', '時間儲存失敗，請檢查網路連線後重試'); });
+        }, 300));
+    }
+    function rememberSavedSchedule($card) {
+        $card.data('twshopSavedStart', $card.find('input[name="start_time"]').val())
+             .data('twshopSavedEnd', $card.find('input[name="end_time"]').val());
+    }
+    $container.on('change', '.twshop-card-header-controls .twshop-datetime-picker', function() {
+        if (dirtyTrackingOn) scheduleSave($(this).closest('.twshop-rule-form'));
+    });
+
     $container.on('change', '.twshop-rule-enabled-toggle', function() {
         saveHeaderToggle($(this), 'enable', 'disable', '✓ 已啟用', '✓ 已停用', applyEnabledLook);
     });
@@ -207,7 +227,6 @@ jQuery(document).ready(function($) {
     }
 
     initCards($container.children('.twshop-rule-form'));
-    renumber();
     // 其他檔案（chip-field.js 等）的 document ready 初始化也會觸發 change，等它們都跑完才開始追蹤修改
     setTimeout(function() { dirtyTrackingOn = true; }, 0);
 
@@ -217,7 +236,6 @@ jQuery(document).ready(function($) {
         axis: 'y',
         opacity: 0.8,
         update: function() {
-            renumber();
             var order = [];
             $container.children('.twshop-rule-form').each(function() {
                 var id = $(this).find('input[name="rule_id"]').val();
@@ -239,7 +257,6 @@ jQuery(document).ready(function($) {
         $container.append(document.getElementById('discount-rule-template').innerHTML);
         var $newRow = $container.children('.twshop-rule-form').last();
         initCards($newRow);
-        renumber();
         setDirty($newRow, true);
         dirtyTrackingOn = true;
         openAndScrollTo($newRow, '.twshop-rule-name-input');
@@ -264,6 +281,7 @@ jQuery(document).ready(function($) {
                     $form.attr('data-rule-type', $form.find('select[name="type"]').val());
                     $form.find('.twshop-duplicate-rule').prop('disabled', false).attr('title', '複製一份（預設停用）');
                     setDirty($form, false);
+                    rememberSavedSchedule($form);
                     showSaveStatus($form, 'success', '✓ 已儲存');
                 } else {
                     showSaveStatus($form, 'error', ajaxErrorMsg(res, '儲存失敗'));
@@ -292,7 +310,6 @@ jQuery(document).ready(function($) {
                 initCards($copy);
                 $copy.find('.twshop-chip-field').trigger('twshop-chip-refresh');
                 $copy.find('.twshop-condition-type').trigger('change');
-                renumber();
                 dirtyTrackingOn = true;
                 showCardStatus($copy, 'success', '已複製（預設停用，確認後再啟用）');
                 openAndScrollTo($copy, '.twshop-rule-name-input');
@@ -311,26 +328,9 @@ jQuery(document).ready(function($) {
         $(this).closest('.twshop-tier-row').remove();
     });
 
-    // ── 搜尋/篩選：純前端比對，規則本來就整頁一次全部渲染 ────────
-    function applyRuleFilters() {
-        var keyword = $('#twshop-rule-search').val().toLowerCase().trim();
-        var typeFilter = $('#twshop-rule-filter-type').val();
-        var statusFilter = $('#twshop-rule-filter-status').val();
-        $container.children('.twshop-rule-form').each(function() {
-            var $card = $(this);
-            var matches = true;
-            if (keyword && (($card.attr('data-rule-name') || '').toLowerCase().indexOf(keyword) === -1)) matches = false;
-            if (typeFilter && $card.attr('data-rule-type') !== typeFilter) matches = false;
-            if (statusFilter && $card.attr('data-rule-enabled') !== statusFilter) matches = false;
-            $card.toggle(matches);
-        });
-    }
-    $('#twshop-rule-search').on('input', applyRuleFilters);
-    $('#twshop-rule-filter-type, #twshop-rule-filter-status').on('change', applyRuleFilters);
-
     // ── 批次操作 ─────────────────────────────────────────────
     $('#twshop-rule-select-all').on('change', function() {
-        $container.children('.twshop-rule-form:visible').find('.twshop-rule-select').prop('checked', $(this).is(':checked'));
+        $container.children('.twshop-rule-form').find('.twshop-rule-select').prop('checked', $(this).is(':checked'));
     });
 
     function getSelectedRuleIds() {
@@ -369,7 +369,6 @@ jQuery(document).ready(function($) {
                     }
                 });
                 dirtyTrackingOn = wasTracking;
-                renumber();
                 var label = { enable: '啟用', disable: '停用', delete: '刪除' }[actionType];
                 showToolbarStatus('success', '✓ 已' + label + ' ' + ids.length + ' 筆規則');
             })
@@ -382,9 +381,11 @@ jQuery(document).ready(function($) {
     // ── 清除時間 ─────────────────────────────────────────────
     $container.on('click', '.twshop-clear-datetime', function(e) {
         e.preventDefault();
-        $(this).closest('.twshop-rule-form').find('.twshop-datetime-picker').each(function() {
+        var $card = $(this).closest('.twshop-rule-form');
+        $card.find('.twshop-datetime-picker').each(function() {
             if (this._flatpickr) this._flatpickr.clear();
         });
+        scheduleSave($card);
     });
 
     // ── 刪除 ─────────────────────────────────────────────────
@@ -394,7 +395,7 @@ jQuery(document).ready(function($) {
         if (!confirm('確定要刪除「' + name + '」嗎？此操作無法復原。')) return;
         var ruleId = $form.find('input[name="rule_id"]').val();
         var removeCard = function() {
-            $form.fadeOut(200, function() { $form.remove(); renumber(); });
+            $form.fadeOut(200, function() { $form.remove(); });
             showToolbarStatus('success', '✓ 已刪除「' + name + '」');
         };
         if (!ruleId) { removeCard(); return; }
