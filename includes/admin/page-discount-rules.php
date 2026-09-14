@@ -113,19 +113,21 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
 
         <div class="twshop-card-header">
             <span class="drag-handle" title="拖曳排序（越前面越先套用）"><?php echo twshop_get_account_tab_icon_svg( 'grip-vertical' ); ?></span>
-            <input type="text" name="name" class="twshop-rule-name-input" value="<?php echo esc_attr( $name ); ?>" placeholder="規則名稱（必填）" aria-label="規則名稱" required />
-            <span class="twshop-badge twshop-badge--warn twshop-rule-dirty-badge" style="display:none;">未儲存</span>
-            <span class="twshop-card-header-controls" title="這些設定切換或選好後立即生效">
-                <span class="twshop-rule-schedule">
-                    <label>開始 <input type="text" class="twshop-datetime-picker" name="start_time" value="<?php echo esc_attr( $s_time ); ?>" placeholder="立即" /></label>
-                    <label>結束 <input type="text" class="twshop-datetime-picker" name="end_time" value="<?php echo esc_attr( $e_time ); ?>" placeholder="不限" /></label>
-                    <a href="#" class="twshop-clear-datetime" title="清除開始與結束時間">清除</a>
-                </span>
+            <span class="twshop-card-header-controls" title="切換後立即生效">
                 <label class="twshop-switch">
                     <input type="checkbox" class="twshop-rule-enabled-toggle" name="enabled" value="yes" <?php checked( $enabled, 'yes' ); ?> />
                     <span class="twshop-switch-slider" aria-hidden="true"></span>
                     <span class="twshop-switch-text"><?php echo $enabled === 'no' ? '停用' : '啟用'; ?></span>
                 </label>
+            </span>
+            <input type="text" name="name" class="twshop-rule-name-input" value="<?php echo esc_attr( $name ); ?>" placeholder="規則名稱（必填）" aria-label="規則名稱" required />
+            <span class="twshop-badge twshop-badge--warn twshop-rule-dirty-badge" style="display:none;">未儲存</span>
+            <span class="twshop-card-header-controls" title="選好或清除後立即生效">
+                <span class="twshop-rule-schedule">
+                    <label>開始 <input type="text" class="twshop-datetime-picker" name="start_time" value="<?php echo esc_attr( $s_time ); ?>" placeholder="立即" /></label>
+                    <label>結束 <input type="text" class="twshop-datetime-picker" name="end_time" value="<?php echo esc_attr( $e_time ); ?>" placeholder="不限" /></label>
+                    <a href="#" class="twshop-clear-datetime" title="清除開始與結束時間">清除</a>
+                </span>
             </span>
             <span class="twshop-rule-status" aria-live="polite"></span>
             <span class="twshop-card-toggle-icon" title="點擊收合或展開"><?php echo twshop_get_account_tab_icon_svg( 'chevron-down' ); ?></span>
