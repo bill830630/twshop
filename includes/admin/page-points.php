@@ -1,0 +1,368 @@
+<?php
+/**
+ * 介面 2：紅利點數獨立設定頁面
+ *
+ * 自 twshop.php 拆出（Phase 4 拆檔重構）。v25.8.25 起改成 5 個真正的頁籤（比照
+ * twshop_system_render_page() 的既有模式），原本單一函式 twshop_marketing_points_tab()
+ * 依畫面區塊拆成 5 支獨立頁籤函式，settings group 同步拆開（見 includes/admin/settings.php）。
+ */
+
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+// -------------------------------------------------------------------------
+// 介面 2：紅利點數獨立設定頁面
+// -------------------------------------------------------------------------
+
+function twshop_points_term() {
+    $term = get_option( 'wc_points_term_name', '' );
+    return $term !== '' ? $term : '點數';
+}
+
+/**
+ * 頁籤：點數規則設定。
+ */
+function twshop_points_rules_tab() {
+    $p_term = get_option( 'wc_points_term_name', '點數' );
+    $p_base = get_option( 'wc_points_base_rate', 100 );
+    $p_rate = get_option( 'wc_points_redemption_rate', 1 );
+    $p_max  = get_option( 'wc_points_max_percent', 30 );
+    $p_min_amount = get_option( 'wc_points_min_cart_amount', 0 );
+    list( $earn_restrict_type, $earn_restrict_values ) = twshop_get_typed_restriction(
+        'wc_points_earn_restrict_type', 'wc_points_earn_restrict_values',
+        array( 'category' => 'wc_points_earn_restricted_category', 'tag' => 'wc_points_earn_restricted_tag' )
+    );
+    list( $redeem_restrict_type, $redeem_restrict_values ) = twshop_get_typed_restriction(
+        'wc_points_redeem_restrict_type', 'wc_points_redeem_restrict_values',
+        array( 'category' => 'wc_points_restricted_categories' )
+    );
+    $p_expiry_days   = (int) get_option( 'wc_points_expiry_days', 0 );
+    $p_notify_days   = get_option( 'wc_points_expiry_notify_days', 7 );
+    $p_notify_subj   = get_option( 'wc_points_expiry_notify_subject', '您的' . twshop_points_term() . '即將到期' );
+    $p_notify_body   = get_option( 'wc_points_expiry_notify_body', "親愛的 {name}：\n\n您有 {amount} {term}將於 {date} 到期，請把握時間使用！" );
+
+    $product_cats = get_terms( array( 'taxonomy' => 'product_cat', 'hide_empty' => false ) );
+    if ( is_wp_error( $product_cats ) ) $product_cats = array();
+    $product_tags = get_terms( array( 'taxonomy' => 'product_tag', 'hide_empty' => false ) );
+    if ( is_wp_error( $product_tags ) ) $product_tags = array();
+
+    $cat_options = array();
+    foreach ( $product_cats as $term ) { $cat_options[ $term->term_id ] = $term->name; }
+    $tag_options = array();
+    foreach ( $product_tags as $term ) { $tag_options[ $term->term_id ] = $term->name; }
+    ?>
+        <form action="options.php" method="post">
+            <?php settings_fields( 'wc_points_rules_group' ); ?>
+
+            <div class="twshop-panel">
+                <?php twshop_panel_head( 'coins', '點數規則設定' ); ?>
+                <div class="twshop-panel-body">
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">點數名稱</th>
+                        <td>
+                            <input type="text" name="wc_points_term_name" value="<?php echo esc_attr( $p_term ); ?>" class="regular-text" placeholder="點數" />
+                            <p class="description">前台顯示的名稱，例如：點數、星幣、金幣、積分。留空則使用預設「點數」。</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">點數獲取比例</th>
+                        <td>消費滿 <input type="number" name="wc_points_base_rate" value="<?php echo esc_attr($p_base); ?>" class="small-text" /> 元，獲得 1 點</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">限制獲得點數的商品</th>
+                        <td>
+                            <?php
+                            echo twshop_render_typed_condition_field(
+                                'wc_points_earn_restrict_type', $earn_restrict_type,
+                                array( 'category' => '商品分類', 'tag' => '商品標籤' ),
+                                array(
+                                    'category' => array( 'name' => 'wc_points_earn_restrict_values', 'options' => $cat_options, 'selected' => $earn_restrict_type === 'category' ? $earn_restrict_values : array() ),
+                                    'tag'      => array( 'name' => 'wc_points_earn_restrict_values', 'options' => $tag_options, 'selected' => $earn_restrict_type === 'tag' ? $earn_restrict_values : array() ),
+                                )
+                            );
+                            ?>
+                            <p class="description">先選擇要限制的類型（商品分類或商品標籤），再從清單中複選項目。設定後，訂單中只有屬於所選項目的商品金額，才會列入點數計算基準；其餘商品消費不會產生點數。選擇「無限制」則依訂單總額計算點數（維持原有行為）。</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">點數折抵匯率</th>
+                        <td><input type="number" name="wc_points_redemption_rate" value="<?php echo esc_attr($p_rate); ?>" class="small-text" min="1" /> 點折抵 1 元</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">單筆最高折抵上限</th>
+                        <td>單筆最多折抵總額 <input type="number" name="wc_points_max_percent" value="<?php echo esc_attr($p_max); ?>" class="small-text" /> %</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">最低消費折抵門檻</th>
+                        <td>購物車總金額需達 <input type="number" step="0.01" name="wc_points_min_cart_amount" value="<?php echo esc_attr($p_min_amount); ?>" class="small-text" /> 元，才可使用點數折抵 (0 為無限制)</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">限制兌換商品</th>
+                        <td>
+                            <?php
+                            echo twshop_render_typed_condition_field(
+                                'wc_points_redeem_restrict_type', $redeem_restrict_type,
+                                array( 'category' => '商品分類', 'tag' => '商品標籤' ),
+                                array(
+                                    'category' => array( 'name' => 'wc_points_redeem_restrict_values', 'options' => $cat_options, 'selected' => $redeem_restrict_type === 'category' ? $redeem_restrict_values : array() ),
+                                    'tag'      => array( 'name' => 'wc_points_redeem_restrict_values', 'options' => $tag_options, 'selected' => $redeem_restrict_type === 'tag' ? $redeem_restrict_values : array() ),
+                                )
+                            );
+                            ?>
+                            <p class="description">先選擇要限制的類型（商品分類或商品標籤），再從清單中複選項目。設定後，購物車內必須包含其中任一所選項目的商品，才能在結帳時看到點數折抵區塊。選擇「無限制」則全館皆可使用。</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">點數有效期限</th>
+                        <td>
+                            每筆點數自入帳日起算 <input type="number" name="wc_points_expiry_days" value="<?php echo esc_attr( $p_expiry_days ); ?>" class="small-text" min="0" /> 天後到期
+                            <p class="description">設為 0 代表點數永久有效（不到期）。使用點數折抵時，會優先扣除最早到期的點數。<strong>此設定啟用前已入帳的點數不受影響，永遠不會到期。</strong></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">到期前提醒</th>
+                        <td>
+                            點數到期前 <input type="number" name="wc_points_expiry_notify_days" value="<?php echo esc_attr( $p_notify_days ); ?>" class="small-text" min="0" /> 天，寄送 Email 提醒會員
+                            <p class="description">設為 0 則不寄送提醒信。僅在上方「點數有效期限」大於 0 時生效。</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">到期提醒信件主旨</th>
+                        <td><input type="text" name="wc_points_expiry_notify_subject" value="<?php echo esc_attr( $p_notify_subj ); ?>" class="regular-text" /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">到期提醒信件內容</th>
+                        <td>
+                            <textarea name="wc_points_expiry_notify_body" rows="4" class="regular-text"><?php echo esc_html( $p_notify_body ); ?></textarea>
+                            <p class="description">可用 <code>{name}</code>／<code>{amount}</code>／<code>{term}</code>／<code>{date}</code> 代表會員姓名/到期點數/點數名稱/到期日。</p>
+                        </td>
+                    </tr>
+                </table>
+                </div>
+            </div>
+
+            <?php submit_button( '儲存點數規則設定' ); ?>
+        </form>
+    <?php twshop_render_chip_field_assets(); ?>
+    <?php
+}
+
+/**
+ * 頁籤：點數提示文字。
+ */
+function twshop_points_texts_tab() {
+    $p_ui_heading        = twshop_option( 'wc_points_ui_heading' );
+    $p_balance_text      = twshop_option( 'wc_points_balance_text' );
+    $p_expiry_soon_text  = twshop_option( 'wc_points_expiry_soon_text' );
+    $p_input_placeholder = twshop_option( 'wc_points_input_placeholder' );
+    $p_btn_apply_text    = twshop_option( 'wc_points_btn_apply_text' );
+    $p_btn_update_text   = twshop_option( 'wc_points_btn_update_text' );
+    $p_applied_text      = twshop_option( 'wc_points_applied_text' );
+    $p_no_balance_text   = twshop_option( 'wc_points_no_balance_text' );
+    $p_min_cart_text     = twshop_option( 'wc_points_min_cart_text' );
+    $p_restricted_text   = twshop_option( 'wc_points_restricted_text' );
+    ?>
+        <form action="options.php" method="post">
+            <?php settings_fields( 'wc_points_texts_group' ); ?>
+
+            <div class="twshop-panel">
+                <?php twshop_panel_head( 'pencil', '點數提示文字', '購物車/結帳頁點數折抵區塊與不可使用時的提示文字。可用 <code>{term}</code> 代表上方設定的點數名稱，其餘 <code>{amount}</code>/<code>{date}</code>/<code>{rate}</code>/<code>{discount}</code>/<code>{names}</code> 依欄位說明代入對應數值。' ); ?>
+                <div class="twshop-panel-body">
+                    <table class="form-table">
+                        <tr><th scope="row">區塊標題</th><td><input type="text" name="wc_points_ui_heading" value="<?php echo esc_attr( $p_ui_heading ); ?>" class="regular-text" /></td></tr>
+                        <tr><th scope="row">目前餘額文字</th><td><input type="text" name="wc_points_balance_text" value="<?php echo esc_attr( $p_balance_text ); ?>" class="regular-text" /></td></tr>
+                        <tr><th scope="row">即將到期提醒</th><td><input type="text" name="wc_points_expiry_soon_text" value="<?php echo esc_attr( $p_expiry_soon_text ); ?>" class="regular-text" /></td></tr>
+                        <tr><th scope="row">輸入框提示文字</th><td><input type="text" name="wc_points_input_placeholder" value="<?php echo esc_attr( $p_input_placeholder ); ?>" class="regular-text" /></td></tr>
+                        <tr><th scope="row">套用按鈕（尚未套用）</th><td><input type="text" name="wc_points_btn_apply_text" value="<?php echo esc_attr( $p_btn_apply_text ); ?>" class="regular-text" /></td></tr>
+                        <tr><th scope="row">套用按鈕（已套用）</th><td><input type="text" name="wc_points_btn_update_text" value="<?php echo esc_attr( $p_btn_update_text ); ?>" class="regular-text" /></td></tr>
+                        <tr><th scope="row">已套用折抵確認文字</th><td><input type="text" name="wc_points_applied_text" value="<?php echo esc_attr( $p_applied_text ); ?>" class="regular-text" /></td></tr>
+                        <tr><th scope="row">餘額不足提示</th><td><input type="text" name="wc_points_no_balance_text" value="<?php echo esc_attr( $p_no_balance_text ); ?>" class="regular-text" /></td></tr>
+                        <tr><th scope="row">未達最低消費門檻提示</th><td><input type="text" name="wc_points_min_cart_text" value="<?php echo esc_attr( $p_min_cart_text ); ?>" class="regular-text" /></td></tr>
+                        <tr><th scope="row">限定商品未達成提示</th><td><input type="text" name="wc_points_restricted_text" value="<?php echo esc_attr( $p_restricted_text ); ?>" class="regular-text" /></td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <?php submit_button( '儲存點數提示文字' ); ?>
+        </form>
+    <?php
+}
+
+/**
+ * 頁籤：點數發放與退還時機。
+ */
+function twshop_points_award_tab() {
+    $award_statuses  = twshop_get_points_award_statuses();
+    $revoke_statuses = twshop_get_points_revoke_statuses();
+    $order_statuses  = wc_get_order_statuses();
+    ?>
+        <form action="options.php" method="post">
+            <?php settings_fields( 'wc_points_award_group' ); ?>
+
+            <div class="twshop-panel">
+                <?php twshop_panel_head( 'clock', '點數發放與退還時機' ); ?>
+                <div class="twshop-panel-body">
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">發放消費回饋點數的訂單狀態</th>
+                        <td>
+                            <input type="hidden" name="wc_points_award_statuses[]" value="" />
+                            <?php foreach ( $order_statuses as $status_key => $status_label ) : $slug = str_replace( 'wc-', '', $status_key ); ?>
+                                <label style="display:inline-block; margin:0 16px 6px 0;">
+                                    <input type="checkbox" name="wc_points_award_statuses[]" value="<?php echo esc_attr( $slug ); ?>" <?php checked( in_array( $slug, $award_statuses, true ) ); ?> />
+                                    <?php echo esc_html( $status_label ); ?>
+                                </label>
+                            <?php endforeach; ?>
+                            <p class="description">訂單進入以上任一勾選狀態時，發放該筆訂單的消費回饋點數（預設僅「已完成」）。同一張訂單只會發放一次，即使之後在多個勾選狀態間轉換也不會重複發放。</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">退還/追回點數的訂單狀態</th>
+                        <td>
+                            <input type="hidden" name="wc_points_revoke_statuses[]" value="" />
+                            <?php foreach ( $order_statuses as $status_key => $status_label ) : $slug = str_replace( 'wc-', '', $status_key ); ?>
+                                <label style="display:inline-block; margin:0 16px 6px 0;">
+                                    <input type="checkbox" name="wc_points_revoke_statuses[]" value="<?php echo esc_attr( $slug ); ?>" <?php checked( in_array( $slug, $revoke_statuses, true ) ); ?> />
+                                    <?php echo esc_html( $status_label ); ?>
+                                </label>
+                            <?php endforeach; ?>
+                            <p class="description">訂單進入以上任一勾選狀態時，退還該訂單當初折抵扣除的點數，並追回已發放的消費回饋點數（預設「已取消」「已退款」「付款失敗」）。同一張訂單只會各自退還/追回一次。</p>
+                        </td>
+                    </tr>
+                </table>
+                </div>
+            </div>
+
+            <?php submit_button( '儲存發放與退還設定' ); ?>
+        </form>
+    <?php
+}
+
+/**
+ * 頁籤：點數兌換商品。
+ */
+function twshop_points_redeem_tab() {
+    $p_term = twshop_points_term();
+    $redeemable_products = get_option( 'wc_points_redeemable_products', array() );
+    if ( ! is_array( $redeemable_products ) ) $redeemable_products = array();
+
+    $product_cats = get_terms( array( 'taxonomy' => 'product_cat', 'hide_empty' => false ) );
+    if ( is_wp_error( $product_cats ) ) $product_cats = array();
+    $product_tags = get_terms( array( 'taxonomy' => 'product_tag', 'hide_empty' => false ) );
+    if ( is_wp_error( $product_tags ) ) $product_tags = array();
+
+    $cat_options = array();
+    foreach ( $product_cats as $term ) { $cat_options[ $term->term_id ] = $term->name; }
+    $tag_options = array();
+    foreach ( $product_tags as $term ) { $tag_options[ $term->term_id ] = $term->name; }
+    ?>
+        <form action="options.php" method="post">
+            <?php settings_fields( 'wc_points_redeem_group' ); ?>
+
+            <div class="twshop-panel">
+                <?php twshop_panel_head( 'gift', '點數兌換商品', '設定會員可直接用' . esc_html( $p_term ) . '兌換的商品，與上方現金折抵機制分開運作：兌換時商品售價歸零、直接扣除對應' . esc_html( $p_term ) . '，不受「單筆最高折抵上限」影響。可個別加入單一商品，也可整批加入某個商品分類/標籤底下所有已上架商品（含日後新增進該分類/標籤的商品，不需要再手動加入）。' ); ?>
+                <div class="twshop-panel-body">
+                    <?php echo twshop_render_redeemable_products_field( $redeemable_products, $cat_options, $tag_options ); ?>
+                </div>
+            </div>
+
+            <?php submit_button( '儲存點數兌換商品設定' ); ?>
+        </form>
+    <?php
+}
+
+/**
+ * 頁籤：匯入點數資料。純 AJAX 工具，不經 register_setting()/options.php，
+ * 搬移前就已經是獨立在 <form> 之外，這裡原封不動延續同一個做法。
+ */
+function twshop_points_import_tab() {
+    $p_term = twshop_points_term();
+    ?>
+        <div class="twshop-panel">
+            <?php twshop_panel_head( 'upload', '匯入點數資料', '以 CSV 檔案批次為現有會員增加' . esc_html( $p_term ) . '，常用於從舊系統遷移會員點數餘額。<br>CSV 每行一筆，欄位依序為 <code>email,points,備註</code>：第一欄需為會員註冊 Email；第二欄為要疊加的' . esc_html( $p_term ) . '（正整數，會加總到會員目前餘額上，不會覆蓋既有點數）；第三欄為選填備註，會寫入該筆點數異動紀錄，留空則記錄為「資料匯入」。找不到對應會員或格式錯誤的行會略過並列出，不影響其他行的匯入。', array(
+                    'url'   => wp_nonce_url( admin_url( 'admin-post.php?action=twshop_download_points_import_template' ), 'twshop_download_points_import_template' ),
+                    'label' => '下載範例 CSV',
+                    'class' => 'button',
+                ) ); ?>
+            <div class="twshop-panel-body">
+                <p>
+                    <input type="file" id="twshop-points-import-file" accept=".csv,text/csv" />
+                    <button type="button" class="button button-primary" id="twshop-points-import-btn">開始匯入</button>
+                </p>
+                <div id="twshop-points-import-result"></div>
+            </div>
+        </div>
+        <?php twshop_enqueue_asset_script( 'admin/points-import', array(
+            'twshopPointsImport' => array(
+                'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                'nonce'   => wp_create_nonce( 'twshop_admin_action' ),
+            ),
+        ) ); ?>
+    <?php
+}
+
+/**
+ * 「點數兌換商品」清單的後台編輯 UI：單一隱藏欄位存 JSON（比照會員等級「生日禮/升等禮」的
+ * gifts-json repeater 慣例），JS 端維護新增/移除、下方即時渲染已選清單。
+ *
+ * v25.8.15 起每筆設定可以是單一商品，也可以是整個商品分類/標籤（展開邏輯見
+ * twshop_resolve_redeemable_products()，includes/modules/points-engine.php）。
+ * 三個下拉選單（商品／分類／標籤）都先渲染在畫面上、用 JS 依「類型」下拉切換顯示/隱藏
+ * 對應的那一個，而不是用 AJAX 動態換選項——分類/標籤清單通常很小，沒必要為了
+ * 換一顆下拉選單多打一次 AJAX。
+ *
+ * v25.8.17 起選「分類」/「標籤」時「所需點數」欄位改隱藏——同分類底下商品售價通常不同，
+ * 硬性統一成同一個點數等於讓貴的商品被賤賣，這兩種類型改成讀取端依各商品當下售價
+ * 自動換算（twshop_calc_redeem_cost_from_price()），管理員不需要也不能為分類/標籤
+ * 手動填點數，欄位切換邏輯見 assets/js/admin/redeemable-products.js。
+ */
+function twshop_render_redeemable_products_field( $redeemable_products, $cat_options, $tag_options ) {
+    $products = wc_get_products( array( 'status' => 'publish', 'limit' => 200, 'orderby' => 'title', 'order' => 'ASC', 'return' => 'objects' ) );
+
+    // 正規化成 {type, id, points_cost}：舊資料（升級前存的 {product_id, points_cost}，
+    // 管理員還沒重新儲存過這一頁）也要能正常顯示，不能直接把 $redeemable_products
+    // 原封不動印進隱藏欄位，否則 JS 端會讀不到 id 而整批消失。
+    $normalized = array();
+    foreach ( $redeemable_products as $row ) {
+        $normalized[] = twshop_normalize_redeemable_entry( $row );
+    }
+
+    ob_start();
+    ?>
+    <div class="twshop-redeem-products-section">
+        <input type="hidden" name="wc_points_redeemable_products" value="<?php echo esc_attr( wp_json_encode( $normalized ) ); ?>" class="redeem-products-json">
+        <div class="redeem-products-list" style="margin:10px 0;"></div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <select class="redeem-item-type-select">
+                <option value="product">單一商品</option>
+                <option value="category">商品分類（整批加入）</option>
+                <option value="tag">商品標籤（整批加入）</option>
+            </select>
+            <select class="redeem-product-add-select">
+                <option value="">選擇商品</option>
+                <?php foreach ( $products as $p ) : ?>
+                    <option value="<?php echo esc_attr( $p->get_id() ); ?>"><?php echo esc_html( $p->get_name() ); ?> (ID: <?php echo esc_html( $p->get_id() ); ?>)</option>
+                <?php endforeach; ?>
+            </select>
+            <select class="redeem-category-add-select" style="display:none;">
+                <option value="">選擇商品分類</option>
+                <?php foreach ( $cat_options as $term_id => $name ) : ?>
+                    <option value="<?php echo esc_attr( $term_id ); ?>"><?php echo esc_html( $name ); ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select class="redeem-tag-add-select" style="display:none;">
+                <option value="">選擇商品標籤</option>
+                <?php foreach ( $tag_options as $term_id => $name ) : ?>
+                    <option value="<?php echo esc_attr( $term_id ); ?>"><?php echo esc_html( $name ); ?></option>
+                <?php endforeach; ?>
+            </select>
+            <input type="number" class="redeem-product-add-points" min="1" placeholder="所需點數" />
+            <span class="redeem-category-cost-note" style="display:none; font-size:12px; color:#72777c;">依商品售價自動換算，不需填點數</span>
+            <button type="button" class="button add-redeem-product-btn">加入</button>
+        </div>
+        <p class="description">分類/標籤是動態展開：加入後，日後新上架進該分類/標籤的商品會自動一併開放兌換，不需要回來這裡重新設定；兌換點數也不是統一值，而是依各商品目前售價換算（換算匯率沿用上方「點數折抵匯率」設定），避免同分類裡貴的商品被低點數賤賣。</p>
+    </div>
+    <?php twshop_enqueue_asset_script( 'admin/redeemable-products' ); ?>
+    <?php
+    return ob_get_clean();
+}

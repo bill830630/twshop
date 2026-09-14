@@ -1,0 +1,12 @@
+/* 終極電商 — 訂單編輯頁的物流資訊 metabox（twshop_render_order_logistics_metabox()）
+   自該函式的內嵌 <style> 抽出（2026-08-21）。
+
+   單獨一支而不是併進 twshop-admin.css：這裡是 WooCommerce 的訂單編輯畫面，不是本外掛
+   自己的後台頁面，載入整份 twshop-admin.css 會把六個設定頁的樣式一起帶進來。
+   載入時機跟 metabox 本身一致——metabox 只有訂單帶有綠界物流 meta 時才註冊，
+   沒有物流資料的訂單不會多載這支檔案。 */
+
+.twshop-order-logistics-info p { margin: 0 0 8px; line-height: 1.5; }
+.twshop-order-logistics-info p:last-child { margin-bottom: 0; }
+.twshop-order-logistics-actions { margin-top: 12px !important; }
+.twshop-order-logistics-actions .button { width: 100%; text-align: center; }

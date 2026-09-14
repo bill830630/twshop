@@ -1,0 +1,230 @@
+/* 終極電商 — 後台設定頁共用視覺樣式（比照短代碼說明頁的卡片風格） */
+
+.twshop-admin-wrap { max-width: 960px; }
+.twshop-admin-wrap > h1 { margin-bottom: 4px; }
+.twshop-admin-intro { color: #72777c; margin-top: 0; margin-bottom: 24px; }
+
+.twshop-panel {
+	background: #fff;
+	border: 1px solid #ccd0d4;
+	border-radius: 6px;
+	margin-top: 24px;
+	overflow: hidden;
+}
+
+.twshop-panel--narrow { max-width: 600px; }
+
+.twshop-panel-head {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 12px;
+	padding: 14px 20px;
+	background: #f6f7f7;
+	border-bottom: 1px solid #ccd0d4;
+}
+
+.twshop-panel-head h2,
+.twshop-panel-head h3 {
+	margin: 0;
+	font-size: 15px;
+}
+
+.twshop-panel-head .button { margin-left: auto; font-weight: normal; }
+
+.twshop-panel-head-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	background: #eef4fb;
+	color: #2271b1;
+	flex-shrink: 0;
+}
+.twshop-panel-head-icon svg { width: 13px; height: 13px; stroke: currentColor; }
+
+/* 頁首列（<h1> + twshop_render_license_badge() 的授權狀態徽章），儀表板／行銷／會員／
+   系統／短代碼說明頁共用，見 twshop_render_license_badge() */
+.twshop-dash-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.twshop-dash-license-badge { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px 14px; border-radius: 999px; background: color-mix(in srgb, var(--twshop-license-color) 12%, #fff); color: var(--twshop-license-color); font-size: 12px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.twshop-dash-license-badge:hover { text-decoration: underline; }
+.twshop-dash-license-badge svg { width: 14px; height: 14px; stroke: currentColor; flex-shrink: 0; }
+
+/* 放大版，僅供「系統 ▸ 授權」頁籤本身取代原本純文字的「目前狀態：xxx」使用，見
+   twshop_render_license_badge( $large = true ) */
+.twshop-dash-license-badge--lg { margin-top: 0; padding: 10px 18px; font-size: 15px; gap: 8px; }
+.twshop-dash-license-badge--lg svg { width: 18px; height: 18px; }
+
+/* 「系統 ▸ 授權」頁籤儲存/重新驗證按鈕送出中的視覺提示，見 twshop_system_license_tab() */
+.twshop-btn-busy { opacity: .7; cursor: wait !important; }
+
+.twshop-panel-hint {
+	flex-basis: 100%;
+	font-size: 12px;
+	color: #72777c;
+	margin: 0;
+}
+
+.twshop-panel-body { padding: 20px; }
+.twshop-panel-body > h3:first-child { margin-top: 0; }
+.twshop-panel-body + .twshop-panel-body { border-top: 1px solid #f0f0f1; }
+
+.twshop-badge {
+	font-size: 11px;
+	font-weight: 600;
+	padding: 2px 8px;
+	border-radius: 20px;
+	background: #e8f0fe;
+	color: #2271b1;
+	white-space: nowrap;
+}
+
+.twshop-badge--warn { background: #fdf0e8; color: #a1590a; }
+.twshop-badge--ok { background: #eafaf1; color: #166534; }
+
+.twshop-hint {
+	font-size: 13px;
+	font-weight: normal;
+	color: #d63384;
+}
+
+.twshop-two-col {
+	display: flex;
+	gap: 30px;
+	flex-wrap: wrap;
+}
+
+.twshop-two-col > div { flex: 1; min-width: 260px; }
+
+.twshop-two-col > div + div {
+	border-left: 1px solid #eee;
+	padding-left: 30px;
+}
+
+.twshop-panel .regular-text { width: 25em; max-width: 100%; }
+.twshop-panel textarea.regular-text { width: 100%; max-width: 500px; }
+
+/* =========================================================================
+   以下各段原本是後台頁面裡的內嵌 <style>，於 2026-08-21 合併進本檔。
+   內嵌樣式的問題不只是重複：瀏覽器無法快取、每次開頁都重新傳一次，而且同一段規則
+   在兩個頁面各寫一份時（.twshop-card-header 就是這樣）改了一邊不會有任何錯誤，
+   只有另一個頁面長得不一樣。
+   ========================================================================= */
+
+/* 儀表板頁面，見 twshop_dashboard_render_page() */
+.twshop-dash-stats{ display:flex; flex-wrap:wrap; gap:16px; margin:20px 0; }
+.twshop-dash-stat{ display:flex; flex-direction:column; align-items:center; background:#fff; border:1px solid #e2e4e7; border-radius:8px; padding:18px 20px; flex:1; min-width:140px; text-align:center; box-shadow:0 1px 2px rgba(0,0,0,.03); }
+.twshop-dash-stat__icon{ display:flex; align-items:center; justify-content:center; width:36px; height:36px; margin-bottom:8px; border-radius:50%; background:#eef4fb; color:#2271b1; }
+.twshop-dash-stat__icon svg{ width:18px; height:18px; stroke:currentColor; }
+.twshop-dash-stat__value{ display:block; font-size:24px; font-weight:600; color:#1d2327; }
+.twshop-dash-stat__label{ display:block; font-size:12px; color:#72777c; margin-top:4px; }
+
+.twshop-dash-modules{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:14px; }
+.twshop-dash-module{ display:block; border:1px solid #e2e4e7; border-radius:6px; padding:14px; background:#fbfbfc; text-decoration:none; color:inherit; transition:.15s; }
+a.twshop-dash-module:hover{ border-color:#2271b1; box-shadow:0 1px 4px rgba(0,0,0,.06); background:#fff; }
+.twshop-dash-module.is-disabled{ opacity:.6; }
+.twshop-dash-module__head{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.twshop-dash-module__head strong{ flex:1; }
+.twshop-dash-module__icon{ display:flex; color:#72777c; }
+.twshop-dash-module__icon svg{ width:15px; height:15px; stroke:currentColor; }
+.twshop-dash-module__desc{ margin:0; font-size:12px; color:#72777c; line-height:1.5; }
+
+.twshop-dash-tiers{ display:flex; flex-direction:column; gap:10px; }
+.twshop-dash-tier-row{ display:flex; align-items:center; gap:12px; }
+.twshop-dash-tier-name{ width:120px; flex-shrink:0; font-size:13px; font-weight:600; color:#1d2327; }
+.twshop-dash-tier-bar-track{ flex:1; height:10px; border-radius:5px; background:#f0f0f1; overflow:hidden; }
+.twshop-dash-tier-bar-fill{ height:100%; border-radius:5px; background:#2271b1; }
+.twshop-dash-tier-count{ width:56px; flex-shrink:0; text-align:right; font-size:12px; color:#72777c; }
+.twshop-dash-tiers-empty{ color:#72777c; font-size:13px; margin:0; }
+
+/* WordPress 原生控制台的 dashboard widget，見 twshop_render_dashboard_widget()。
+   這一段是本檔唯一不在本外掛自己的後台頁面上使用的樣式——widget 掛在 wp-admin/index.php，
+   所以 twshop_admin_external_scripts() 對 index.php 也要載入本檔（見該函式）。 */
+.twshop-widget__notice{ background:#fcf9e8; border-left:4px solid #dba617; padding:8px 12px; margin:0 0 12px; font-size:13px; }
+.twshop-widget__modules{ margin:0 0 14px; padding:0; list-style:none; }
+.twshop-widget__module{ display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #f0f0f1; font-size:13px; }
+.twshop-widget__module:last-child{ border-bottom:none; }
+.twshop-widget__module-icon{ display:flex; color:#72777c; flex-shrink:0; }
+.twshop-widget__module-icon svg{ width:14px; height:14px; stroke:currentColor; }
+.twshop-widget__module a{ flex:1; text-decoration:none; }
+.twshop-widget__module span:not(.twshop-widget__module-dot){ flex:1; }
+.twshop-widget__module.is-disabled{ color:#a7aaad; }
+.twshop-widget__module-dot{ width:8px; height:8px; border-radius:50%; background:#00a32a; flex-shrink:0; }
+.twshop-widget__module.is-disabled .twshop-widget__module-dot{ background:#dcdcde; }
+.twshop-widget__stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; text-align:center; padding-top:10px; border-top:1px solid #f0f0f1; }
+.twshop-widget__stats strong{ display:block; font-size:18px; color:#1d2327; }
+.twshop-widget__stats span{ display:block; font-size:11px; color:#72777c; margin-top:2px; }
+.twshop-widget__more{ margin:12px 0 0; text-align:right; font-size:13px; }
+
+/* 「系統設定 ▸ 模組開關」的滑動開關與模組列，見 twshop_system_modules_tab() */
+.twshop-toggle { position:relative; display:inline-block; width:44px; height:24px; vertical-align:middle; flex-shrink:0; }
+.twshop-toggle input { opacity:0; width:0; height:0; }
+.twshop-slider { position:absolute; cursor:pointer; inset:0; background:#ccc; border-radius:24px; transition:.2s; }
+.twshop-slider:before { content:""; position:absolute; height:18px; width:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.2s; }
+input:checked + .twshop-slider { background:#2271b1; }
+input:checked + .twshop-slider:before { transform:translateX(20px); }
+.twshop-module-row { display:flex; align-items:center; gap:16px; padding:13px 0; border-bottom:1px solid #f0f0f0; }
+.twshop-module-row:last-child { border-bottom:none; }
+.twshop-module-label { font-weight:600; width:120px; flex-shrink:0; }
+.twshop-module-desc { color:#72777c; font-size:13px; }
+
+/* 可摺疊卡片（折扣規則卡片與會員等級卡片共用）。這三條原本在
+   twshop_marketing_rules_tab() 與 twshop_member_tiers_tab() 各寫了一份、逐字相同。 */
+.twshop-card-header:hover{ background:#eee!important; }
+.twshop-card-toggle-icon{ color:#666; transition:transform 0.2s; }
+.twshop-card-toggle-icon.is-open{ transform:rotate(180deg); }
+.drag-handle svg,
+.twshop-card-toggle-icon svg{ display:inline-block; vertical-align:middle; width:16px; height:16px; stroke:currentColor; }
+
+/* 折扣規則卡片專屬（會員等級卡片沒有這幾個），見 twshop_marketing_rules_tab() */
+.twshop-clear-datetime{ color:#b32d2e; text-decoration:none; font-size:12px; white-space:nowrap; }
+.twshop-rule-disabled{ opacity:0.55; }
+.twshop-rule-disabled .twshop-card-header{ background:#f0f0f0!important; }
+
+/* 會員中心頁籤拖曳排序時的插入位置提示，見 twshop_member_tabs_tab() */
+.twshop-tab-row-placeholder{
+	border:2px dashed #007cba;
+	background:#e5f5fa;
+	border-radius:4px;
+	margin-bottom:8px;
+}
+
+/* 會員中心頁籤的圖示選擇器，見 twshop_render_account_tab_icon_picker_assets() */
+.twshop-icon-picker{ position:relative; }
+.twshop-icon-picker-toggle{ display:flex!important; align-items:center; justify-content:center; width:32px; height:32px; padding:0!important; }
+/* .twshop-icon-picker-preview 本身也要是 flex 容器：SVG 預設是 inline 元素，會保留一截
+   baseline 下方的行高空間，即使外層按鈕已經 flex 置中，這截空間還是會讓圖示視覺上偏下，
+   沒有真正垂直置中在框內。svg 額外加 display:block 徹底移除這個 inline 行為。 */
+.twshop-icon-picker-preview{ display:flex; align-items:center; justify-content:center; line-height:0; }
+.twshop-icon-picker-toggle svg{ display:block; width:18px; height:18px; color:#555; }
+.twshop-icon-picker-toggle.is-empty svg{ color:#bbb; }
+.twshop-icon-picker-panel{ display:none; position:absolute; z-index:10; top:36px; left:0; width:236px; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #ccd0d4; border-radius:4px; box-shadow:0 2px 8px rgba(0,0,0,.15); padding:6px; grid-template-columns:repeat(6,1fr); gap:2px; }
+.twshop-icon-picker-panel.is-open{ display:grid; }
+.twshop-icon-picker-option{ display:flex; align-items:center; justify-content:center; width:34px; height:34px; padding:0; background:transparent; border:1px solid transparent; border-radius:3px; cursor:pointer; }
+.twshop-icon-picker-option:hover{ background:#f0f0f1; border-color:#ccd0d4; }
+.twshop-icon-picker-option svg{ display:block; width:18px; height:18px; color:#444; }
+.twshop-icon-picker-option--none{ grid-column:1/-1; width:auto; justify-content:flex-start; gap:6px; padding:0 6px; }
+.twshop-icon-picker-option--none svg{ width:16px; height:16px; color:#b32d2e; }
+.twshop-icon-picker-option--none span{ font-size:12px; color:#555; }
+
+/* 「下拉挑選、已選項目以方塊呈現」欄位，見 twshop_render_chip_field_assets() */
+.twshop-chip-box{ display:flex; flex-wrap:wrap; gap:6px; min-height:32px; padding:6px; border:1px solid #ddd; border-radius:4px; background:#fff; margin-bottom:6px; }
+.twshop-chip-box:empty::before{ content:'尚未選擇項目'; color:#999; font-size:12px; padding:2px; }
+.twshop-chip{ display:inline-flex; align-items:center; gap:6px; background:#e7f2fa; color:#007cba; border:1px solid #b8e0f5; border-radius:3px; padding:3px 8px; font-size:12px; }
+.twshop-chip-remove{ color:#b32d2e; text-decoration:none; font-weight:bold; cursor:pointer; }
+.twshop-chip-remove:hover{ color:#761b19; }
+
+/* 序號未授權時的唯讀提示與被鎖住的設定區塊，見 twshop_render_readonly_notice() */
+.twshop-readonly-notice .twshop-panel-body{ padding:14px 20px; }
+.twshop-readonly-preview{ position:relative; opacity:.65; filter:grayscale(.2); }
+.twshop-readonly-preview, .twshop-readonly-preview *{ cursor:not-allowed !important; }
+
+/* 「點數兌換商品」新增列的「所需點數」欄位，見 twshop_render_redeemable_products_field()。
+   原本疊了 WP 核心的 .small-text，但 wp-admin/css/forms.css 另有一條
+   input[type="number"].small-text{ width:65px } ——element+attribute+class，
+   specificity 比我們原本疊加的 input.redeem-product-add-points（element+class）高，
+   不管兩支樣式表載入順序為何，核心那條永遠贏，加寬完全沒生效。標記本身已拿掉
+   small-text class（page-points.php），這裡改成唯一一條寬度規則，不用再打 specificity 仗。 */
+.redeem-product-add-points{ width:100px; padding:0 8px; }

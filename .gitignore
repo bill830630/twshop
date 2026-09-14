@@ -1,0 +1,12 @@
+.DS_Store
+
+# 授權伺服器（2026-09 外掛端授權系統移除後已無程式碼呼叫，純孤兒目錄）：
+# 應獨立為私有 repo，不與客戶端外掛同倉庫；licenses.json 含全體客戶序號、姓名、方案與到期日
+license-server/
+
+# repo 是公開的（2026-09 起，比照 ultimate-login v1.33.0）：這些是內部開發用檔案，
+# 不進 git、只留在本機硬碟——CLAUDE.md 含商業邏輯與已下架授權系統的安全稽核紀錄，
+# .dev-tools/ 是開發期驗證工具，release.sh 是本機專屬發版腳本。
+CLAUDE.md
+.dev-tools/
+release.sh

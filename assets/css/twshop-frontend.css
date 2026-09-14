@@ -1,0 +1,746 @@
+/* === 強化版購物 - 前台樣式 === */
+
+/* 移除購物車頁原生的「優惠券代碼」輸入框：本外掛的視覺化優惠券卡片＋彈出視窗已完整取代這個入口，
+   兩套並存容易讓顧客搞不清楚要用哪一個。這裡只隱藏購物車頁自己的（WooCommerce cart-form.php
+   輸出的 `<div class="coupon">`，範圍限定在 `.woocommerce-cart-form` 底下），結帳頁原生的優惠券
+   欄位是不同的 class/markup（`.checkout_coupon`），不受影響——本外掛本來就不會在結帳頁自動注入
+   視覺化優惠券區塊，所以結帳頁維持原生欄位可用。 */
+.woocommerce-cart-form .coupon {
+    display: none !important;
+}
+
+/* 購物車／結帳頁隱藏原生「已套用優惠券」列的移除按鈕（block-based 版型）：classic 版型
+   （wc_cart_totals_coupon_html() 輸出的 `<a class="woocommerce-remove-coupon">`）已在 PHP 端
+   用 `twshop_hide_cart_coupon_remove_link` filter 整個拿掉連結，但 Cart/Checkout block 的
+   已套用優惠券是 React 元件（Chip 元件，`.wc-block-components-totals-discount__coupon-list-item`
+   內的 `.wc-block-components-chip__remove` 按鈕）純前端渲染，無法用 PHP filter 處理，只能用
+   CSS 隱藏。scope 同時涵蓋 `.wc-block-cart`（Cart block）與 `.wc-block-checkout`
+   （Checkout block）兩種外層 wrapper。 */
+.wc-block-cart .wc-block-components-totals-discount__coupon-list-item .wc-block-components-chip__remove,
+.wc-block-checkout .wc-block-components-totals-discount__coupon-list-item .wc-block-components-chip__remove {
+    display: none !important;
+}
+
+/* 購物車頁「已套用優惠券」列，手機版標題後方多一個冒號的修正：
+   WooCommerce cart-totals.php 把 wc_cart_totals_coupon_label() 回傳的字串同時用在兩個地方——
+   桌機版 <th> 直接顯示全文、手機版當作 <td data-title="..."> 屬性值。twshop_cart_coupon_label_use_title()
+   （twshop.php）把這個字串改成「優惠券: 標題」（已經自帶冒號），但主題 Blocksy 手機版的響應式表格樣式
+   （table.shop_table_responsive tbody td[data-title]:before { content: attr(data-title) ": "; }，
+   @media max-width:689.98px）會再幫每一格自動補一個「: 」，兩者疊加變成「優惠券: 標題: 」，多了一個
+   不該有的冒號。其餘列（小計/運費/合計等）的 data-title 是 WC 原生的純標籤文字（沒有冒號），
+   Blocksy 補的冒號對那些列是正確、必要的，所以只針對「已套用優惠券」列（.cart-discount）覆寫，
+   改成不再額外補冒號；選擇器多了 tr.cart-discount 這層 class，比 Blocksy 原本的規則更精確，
+   靠選擇器特異度自然覆蓋，不需要 !important。 */
+@media (max-width: 689.98px) {
+    table.shop_table_responsive tbody tr.cart-discount td[data-title]:before {
+        content: attr(data-title);
+    }
+}
+
+/* 會員中心頁籤 AJAX 切換時的載入態 */
+.woocommerce-MyAccount-content.twshop-account-loading {
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+/* 會員中心頁籤自訂圖示（Lucide 線條風 SVG，見 assets/icons/）：只加間距與尺寸，顏色沿用連結文字本身的
+   顏色（SVG 本身是 stroke="currentColor"，不覆寫主題的強調色變數），只有後台實際設定過圖示的頁籤才會有
+   .twshop-tab-icon，其餘頁籤不受影響。間距沿用 Blocksy 主題原生圖示（a:before）的 margin-inline-end:15px，
+   讓自訂圖示與主題預設圖示跟文字的距離一致；不額外做 position/top 微調，改依賴主題
+   `.woocommerce-MyAccount-navigation ul li a` 本身的 `display:flex; align-items:center;` 做垂直置中，
+   跟主題原生圖示的對齊方式一致。SVG 尺寸對齊主題原生圖示的 icon box 寬度（Blocksy 該規則是
+   font-size:16px + width:20px——字型圖示的實際視覺墨色通常比 font-size 數字看起來更滿版，
+   單純把 SVG 也設成 16px 反而視覺上偏小，改對齊 20px 的 box 寬度比較接近觀感）。 */
+.woocommerce-MyAccount-navigation-link a .twshop-tab-icon {
+    display: inline-flex;
+    margin-inline-end: 15px;
+    color: inherit;
+}
+.woocommerce-MyAccount-navigation-link a .twshop-tab-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* 會員中心頁籤文字不要底線：Blocksy 的「連結樣式 = 底線」(body[data-link=type-2]) 規則是
+   `[data-link=type-2] :where(.entry-content :where(ul,ol) a, ...):not(:hover) { --theme-text-decoration: underline }`，
+   用的是「.entry-content 底下任何 ul/ol 裡的 a」這種後代選擇器。會員中心整塊是 [woocommerce_my_account]
+   輸出、包在 .entry-content 裡，頁籤又剛好是 nav > ul > li > a，所以會被這條當成「內文清單連結」畫上底線。
+   主題自己那條 `.woocommerce-MyAccount-navigation ul li a` 只設了顏色/高度/padding，沒宣告 text-decoration，
+   擋不下來。這裡直接宣告 text-decoration:none（(0,1,3) 勝過主題套底線的 `a{}` (0,0,1)），不需要 !important，
+   換主題也不會有副作用。 */
+.woocommerce-MyAccount-navigation ul li a {
+    text-decoration: none;
+}
+
+/* 會員中心頁籤：手機版改為可橫向滑動，按鈕本身樣式（顏色/高度/間距等）與桌機版完全相同，只改排列方向。
+   後台「頁籤排序與開關」區塊可關閉此功能（wc_account_tab_mobile_scroll），關閉時不會加上 body class，
+   以下規則就不會生效，改沿用佈景主題原本的直向清單。 */
+@media (max-width: 689.98px) {
+    body.twshop-account-tab-mobile-scroll .woocommerce-MyAccount-navigation ul {
+        display: flex !important;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    body.twshop-account-tab-mobile-scroll .woocommerce-MyAccount-navigation ul::-webkit-scrollbar {
+        display: none;
+    }
+    body.twshop-account-tab-mobile-scroll .woocommerce-MyAccount-navigation ul li {
+        flex: 0 0 auto;
+    }
+    body.twshop-account-tab-mobile-scroll .woocommerce-MyAccount-navigation ul li a {
+        white-space: nowrap;
+    }
+    /* 主題原本 :hover 和 .is-active 共用同一組強調色，觸控裝置點擊後 :hover 容易卡住不放，
+       導致「剛點過的頁籤」和「目前真正作用中的頁籤」看起來一樣。手機版拿掉 hover 專屬的強調色，
+       只保留 .is-active 一個視覺狀態。 */
+    body.twshop-account-tab-mobile-scroll .woocommerce-MyAccount-navigation ul li:hover:not(.is-active) a {
+        background: transparent;
+        color: var(--account-nav-text-initial-color, var(--theme-palette-color-3));
+    }
+}
+
+/* 點數異動顏色 (語意色，可由主題覆寫) */
+.twshop-points-earn { color: #2e7d32; font-weight: 700; }
+.twshop-points-use  { color: #c62828; font-weight: 700; }
+
+/* 點數紀錄滾動容器 */
+.twshop-points-history-wrap {
+    max-height: 280px;
+    overflow-y: auto;
+    margin-bottom: 1em;
+}
+.twshop-points-history-wrap table.shop_table {
+    margin-bottom: 0;
+}
+/* 在行動版響應式模式下，時間欄位縮小以避免過長 */
+.twshop-points-history-wrap table.shop_table td:first-child {
+    font-size: 12px;
+    color: var(--theme-text-color, inherit);
+    opacity: 0.75;
+}
+
+/* 點數異動紀錄：手機版改為卡片式（比照 .twshop-tier-table 的響應式作法），
+   並把「時間＋異動點數」提升為卡片標頭同一行顯示，一眼就能看到何時變動多少，
+   其餘（說明/餘額/使用期限）維持 label:value 各自一行，比純文字表格直排更容易閱讀。 */
+@media screen and (max-width: 600px) {
+    .twshop-points-history-wrap {
+        max-height: 420px;
+    }
+    .twshop-points-history-wrap table.shop_table thead {
+        display: none;
+    }
+    .twshop-points-history-wrap table.shop_table tr {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 6px;
+        margin-bottom: 10px;
+        padding: 10px 14px;
+    }
+    .twshop-points-history-wrap table.shop_table tr:last-child {
+        margin-bottom: 0;
+    }
+    .twshop-points-history-wrap table.shop_table td {
+        border: none;
+        white-space: normal;
+        padding: 0;
+    }
+    .twshop-points-history-wrap table.shop_table td:nth-child(1) {
+        order: 1;
+    }
+    .twshop-points-history-wrap table.shop_table td:nth-child(2) {
+        order: 2;
+        margin-inline-start: auto;
+        font-size: 17px;
+    }
+    .twshop-points-history-wrap table.shop_table td:nth-child(3),
+    .twshop-points-history-wrap table.shop_table td:nth-child(4),
+    .twshop-points-history-wrap table.shop_table td:nth-child(5) {
+        flex-basis: 100%;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 6px;
+        text-align: right;
+    }
+    .twshop-points-history-wrap table.shop_table td:nth-child(3) {
+        order: 3;
+        padding-top: 8px;
+        margin-top: 8px;
+        border-top: 1px dashed rgba(0, 0, 0, 0.1);
+    }
+    .twshop-points-history-wrap table.shop_table td:nth-child(4) { order: 4; }
+    .twshop-points-history-wrap table.shop_table td:nth-child(5) { order: 5; }
+    .twshop-points-history-wrap table.shop_table td[data-title]::before {
+        content: attr(data-title);
+        font-weight: 600;
+        text-align: left;
+        color: var(--theme-text-color, #555);
+        opacity: 0.75;
+    }
+    .twshop-points-history-wrap table.shop_table td:nth-child(1)::before,
+    .twshop-points-history-wrap table.shop_table td:nth-child(2)::before {
+        content: none;
+    }
+}
+
+/* 會員中心：兩個區塊之間的分隔線 */
+.twshop-section-divider {
+    border: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    margin: 2.5em 0;
+}
+
+/* 結帳頁：隱藏移動後在 order review 裡的空白運送列 */
+tr.twshop-shipping-hidden { display: none !important; }
+
+/* 結帳／編輯地址頁：郵遞區號改由「縣/市 ＋ 鄉鎮市區」自動帶入，欄位不顯示但仍在表單裡照常送出
+   （見 twshop_taiwan_hide_postcode_field()）。
+   !important 是必要的：twshop-frontend.js 的超商取貨切換在「非超商」分支會對整組地址欄位列
+   呼叫 jQuery .show()，那會寫成 inline style="display: block"，沒有 !important 就蓋不過去。 */
+.twshop-postcode-auto { display: none !important; }
+
+/* 結帳／編輯地址頁：只有一個允許銷售/運送的國家時，「國家/地區」欄位不顯示
+   （見 twshop_hide_single_country_field()）。欄位本身仍正常送出唯一允許的國別代碼
+   （WooCommerce 核心對單一國家的 <select> 本來就寫死該值，不受這裡隱藏影響）。
+   !important 理由同上一條 .twshop-postcode-auto。 */
+.twshop-country-auto { display: none !important; }
+
+/* 結帳頁：移入帳單表單的運送方式選擇區塊 */
+#twshop-shipping-placeholder {
+    clear: both;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 14px 16px;
+    margin-bottom: 1em;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 5px;
+    background: var(--theme-palette-color-8, #f8f9fa);
+}
+.twshop-shipping-label {
+    margin: 0 0 10px;
+    font-weight: 600;
+    font-size: 14px;
+}
+#twshop-shipping-placeholder ul#shipping_method {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+#twshop-shipping-placeholder ul#shipping_method li {
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+#twshop-shipping-placeholder ul#shipping_method li:last-child {
+    margin-bottom: 0;
+}
+
+/* 會員等級權益總覽表 */
+.twshop-tier-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.twshop-tier-table th,
+.twshop-tier-table td {
+    white-space: nowrap;
+}
+
+/*
+ * Blocksy 全域規則 table.shop_table tr>*:first-child / :last-child 會把
+ * 首末格的 padding-inline-start/end 清零，導致「等級」偏左、「升等禮」偏右。
+ * 此處提升特異度（相同 0,0,2,2），靠 CSS 載入順序蓋回去。
+ */
+table.twshop-tier-table tr > *:first-child { padding-inline-start: 12px; }
+table.twshop-tier-table tr > *:last-child  { padding-inline-end:   12px; }
+
+@media screen and (max-width: 600px) {
+    .twshop-tier-table thead {
+        display: none;
+    }
+    .twshop-tier-table tr {
+        display: block;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 6px;
+        margin-bottom: 1em;
+        padding: 8px 0;
+    }
+    table.twshop-tier-table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 6px 14px;
+        border: none;
+        white-space: normal;
+        text-align: right;
+    }
+    table.twshop-tier-table tbody td:first-child { padding-inline-start: 14px; }
+    table.twshop-tier-table tbody td:last-child  { padding-inline-end:   14px; }
+    table.twshop-tier-table tbody td[data-title]::before {
+        content: attr(data-title);
+        font-weight: 600;
+        flex-shrink: 0;
+        float: none;
+        display: block;
+        text-align: left;
+        color: var(--theme-text-color, #555);
+        opacity: 0.75;
+    }
+}
+
+/* 等級資訊列：補強手機版換行（視覺樣式由 woocommerce-message 提供） */
+.twshop-tier-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 10px;
+    line-height: 1.7;
+}
+
+/* 等級表格：目前等級列 */
+.twshop-tier-table tr.twshop-tier-current {
+    background: rgba(0, 0, 0, 0.04);
+    font-weight: 700;
+}
+
+@media screen and (max-width: 600px) {
+    .twshop-tier-table tr.twshop-tier-current {
+        border: 2px solid rgba(0, 0, 0, 0.22);
+    }
+}
+
+/* 視覺化優惠券卡片：外觀跟隨 Blocksy 主題的圓角/陰影/邊框色變數，讓卡片風格與主題其他區塊（表單、按鈕）一致；
+   按鈕沿用 WooCommerce/主題既有的 .button / .button.alt class，不再另外覆寫顏色，套用哪個佈景主題按鈕長怎樣，卡片按鈕就跟著長怎樣。 */
+.twshop-visual-coupons-wrapper {
+    clear: both;
+    width: 100%;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+/* 購物車頁：優惠券按鈕緊接在點數區塊下方，點數區塊本身已有 margin-bottom，這裡不用再疊加上緣間距 */
+.twshop-points-redemption-wrapper + .twshop-visual-coupons-wrapper {
+    margin-top: 0;
+}
+.twshop-visual-coupons-wrapper,
+.twshop-coupons-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+.twshop-no-coupon-msg {
+    color: var(--theme-text-color, #666);
+    margin-top: 20px;
+    width: 100%;
+    grid-column: 1 / -1;
+}
+
+/* 購物車/結帳頁的優惠券入口按鈕＋彈出視窗：帳戶頁（我的優惠券）不使用這組樣式，維持原本一律展開的網格 */
+.twshop-coupons-dialog {
+    width: min(560px, calc(100% - 32px));
+    max-height: min(80vh, 640px);
+    padding: 0;
+    margin: auto;
+    border: none;
+    border-radius: var(--theme-border-radius, 8px);
+    background: var(--theme-content-background, #fff);
+    box-shadow: var(--theme-box-shadow, 0 10px 40px rgba(0, 0, 0, 0.25));
+    /* 開關動畫：淡入＋輕微上移縮放，比原生 <dialog> 預設的「瞬間出現/消失」自然。
+       display/overlay 搭配 allow-discrete，讓 close() 觸發的關閉也會播放同一組轉場，
+       瀏覽器會延後真正把 dialog 移出畫面，直到轉場結束（不支援 @starting-style 的舊瀏覽器則優雅退化為無動畫直接顯示）。 */
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease, overlay 0.2s ease allow-discrete, display 0.2s ease allow-discrete;
+}
+.twshop-coupons-dialog[open] {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+@starting-style {
+    .twshop-coupons-dialog[open] {
+        opacity: 0;
+        transform: scale(0.96) translateY(8px);
+    }
+}
+.twshop-coupons-dialog::backdrop {
+    background: rgba(0, 0, 0, 0);
+    transition: background-color 0.2s ease allow-discrete;
+}
+.twshop-coupons-dialog[open]::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+}
+@starting-style {
+    .twshop-coupons-dialog[open]::backdrop {
+        background: rgba(0, 0, 0, 0);
+    }
+}
+.twshop-coupons-dialog-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--theme-border-color, #eee);
+}
+.twshop-coupons-dialog-head h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--theme-text-color, #333);
+}
+.twshop-coupons-dialog-close {
+    flex-shrink: 0;
+    padding: 4px;
+    border: none;
+    background: none;
+    color: var(--theme-text-color, #666);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+.twshop-coupons-dialog-close:hover {
+    opacity: 0.7;
+}
+.twshop-coupons-dialog .twshop-coupons-grid {
+    grid-template-columns: 1fr;
+    padding: 16px 18px 20px;
+    margin: 0;
+    max-height: calc(min(80vh, 640px) - 56px);
+    overflow-y: auto;
+}
+.visual-coupon-card {
+    border: 1px solid var(--theme-border-color, #e2e8f0);
+    padding: 15px;
+    border-radius: var(--theme-border-radius, 8px);
+    background: var(--theme-content-background, #fff);
+    box-shadow: var(--theme-box-shadow, 0 1px 3px rgba(0, 0, 0, 0.05));
+    box-sizing: border-box;
+    text-align: left;
+    transition: 0.3s;
+}
+.visual-coupon-card.is-used {
+    filter: grayscale(100%);
+    opacity: 0.6;
+}
+/* body（文案）+ 按鈕 這一排維持原本 flex 並排，跟 v25.5.92 新增的滿額提示區塊（垂直堆疊在下方）分開 */
+.twshop-coupon-card-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.twshop-coupon-card-body {
+    flex: 1;
+    padding-right: 15px;
+    overflow: hidden;
+}
+.twshop-coupon-price {
+    margin-bottom: 5px;
+    font-size: 1.5em;
+    line-height: 1;
+}
+.twshop-coupon-title {
+    margin: 0 0 6px;
+    font-size: 18px;
+    line-height: 1.2;
+    font-weight: bold;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    color: var(--theme-text-color, #333);
+}
+.twshop-coupon-desc {
+    margin: 0;
+    font-size: 12px;
+    color: var(--theme-text-color, #666);
+    line-height: 1.4;
+}
+.twshop-coupon-expiry {
+    font-size: 11px;
+    color: var(--theme-text-color, #999);
+    margin-top: 8px;
+    opacity: 0.8;
+}
+.visual-coupon-card .v-coupon-message {
+    display: none;
+    font-size: 11px;
+    font-weight: bold;
+    margin-top: 6px;
+}
+.twshop-coupon-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    min-width: 80px;
+    white-space: nowrap;
+    text-align: center;
+}
+.twshop-coupon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.twshop-coupon-btn-remove {
+    background-color: #dc3232 !important;
+    color: #fff !important;
+    border-color: #dc3232 !important;
+}
+
+/* 優惠券「還差 $X 即可使用」提示（v25.5.92），優惠券因未達最低消費而暫不可用時輸出在卡片底下。
+   v25.8.8 起只剩這一行文字：原本還有進度條（-track/-fill）與推薦加購清單（-hint/-products/
+   -product/__name/__price/-add）共 8 個 class，連同背後的全站商品查詢一起移除，
+   理由見 includes/modules/membership.php 的 twshop_render_coupon_gap_info()。 */
+.twshop-coupon-gap {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    font-size: 12px;
+    color: var(--theme-text-color, #444);
+}
+
+/* 極窄螢幕：卡片內容跟按鈕並排會太擠，改成上下堆疊、按鈕滿版方便點按 */
+@media screen and (max-width: 400px) {
+    .twshop-coupon-card-main {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .twshop-coupon-card-body {
+        padding-right: 0;
+        margin-bottom: 10px;
+    }
+    .twshop-coupon-btn {
+        width: 100%;
+        box-sizing: border-box;
+    }
+}
+
+/* 購物車 / 結帳頁點數折抵區塊 */
+.twshop-points-redemption-wrapper {
+    margin-bottom: 1em;
+}
+.twshop-points-redemption {
+    padding: 0 0 15px;
+    border: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    margin-bottom: 15px;
+    background: none;
+}
+.twshop-points-redemption h4 {
+    margin: 0 0 8px;
+    font-size: 15px;
+}
+.twshop-points-redemption p {
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+.twshop-points-redemption .twshop-points-input-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.twshop-points-redemption .twshop-points-input-row input {
+    flex: 1;
+    min-width: 130px;
+    /* 強制跟主題表單元件同一個高度變數，避免 type="number" 的原生上下箭頭（spinner）
+       在部分行動瀏覽器（尤其 iOS Safari）撐高輸入框，導致跟按鈕/主題其他欄位對不齊、
+       看起來像是「另外定義」的高度。桌機版原本就沒有明顯落差，這裡統一套用不分斷點。 */
+    height: var(--theme-form-field-height, 40px);
+    box-sizing: border-box;
+}
+/* 隱藏 number input 原生的上下箭頭：這組箭頭在不同瀏覽器/系統的預設尺寸不一致，
+   是實際撐高輸入框、讓它看起來跳出主題風格的主因；點數只需要文字輸入，不需要這組控制項。 */
+.twshop-points-redemption .twshop-points-input-row input[type="number"]::-webkit-outer-spin-button,
+.twshop-points-redemption .twshop-points-input-row input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.twshop-points-redemption .twshop-points-input-row input[type="number"] {
+    -moz-appearance: textfield;
+}
+.twshop-points-notice {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--theme-text-color, #666);
+    opacity: 0.85;
+}
+
+/* 手機版：輸入框與按鈕改為上下堆疊，只調整排列方向，寬度交給主題表單元件的預設 100% 寬，
+   不額外覆寫 width，避免跟主題自己的輸入框樣式打架。
+   已用實際頁面（Chrome DevTools 量測）驗證找到根因並修正：input 原本的 `flex: 1`
+   在橫向排列（flex-direction: row）時只影響「寬度」沒問題，但改成 column 後，
+   flex:1 等同 flex-basis:0%，這時 flex-basis 影響的是主軸＝「高度」，會讓 input
+   的高度被 flex 排版邏輯搶去（實測整個崩塌到 20px），而旁邊沒有 flex:1 的按鈕仍是
+   正常的 40px，兩者高度對不齊，就是「輸入框在手機版另外定義」的真正原因。
+   這裡改回 `flex: none`，讓 input 在直排時维持自己原本的 height（40px）。 */
+@media screen and (max-width: 480px) {
+    .twshop-points-redemption .twshop-points-input-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .twshop-points-redemption .twshop-points-input-row input {
+        flex: none;
+    }
+}
+
+/* 會員中心：點數單一卡片 — 餘額置頂最醒目，其餘規則以 label/value 列表呈現（獨立版面，不依賴主題的 woocommerce-message 樣式） */
+.twshop-points-card {
+    padding: 24px 20px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    background: var(--theme-palette-color-8, #f8f9fa);
+    box-sizing: border-box;
+    margin-bottom: 1.2em;
+}
+.twshop-points-card__balance {
+    text-align: center;
+    padding-bottom: 18px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.twshop-points-card__balance-label {
+    font-size: 12px;
+    opacity: .6;
+    margin-bottom: 6px;
+}
+.twshop-points-card__balance-value {
+    font-size: 2.4em;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.twshop-points-card__balance-unit {
+    font-size: 0.4em;
+    font-weight: 400;
+    opacity: .7;
+}
+.twshop-points-card__balance-worth {
+    font-size: 13px;
+    opacity: .65;
+    margin-top: 6px;
+}
+
+.twshop-points-card__details {
+    display: flex;
+    flex-direction: column;
+}
+.twshop-points-card__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    font-size: 13px;
+    line-height: 1.6;
+}
+.twshop-points-card__row:first-child {
+    border-top: none;
+}
+.twshop-points-card__row-label {
+    flex: 0 0 auto;
+    font-weight: 700;
+    opacity: .6;
+    white-space: nowrap;
+}
+.twshop-points-card__row-value {
+    flex: 1 1 auto;
+    text-align: right;
+    color: var(--theme-text-color, inherit);
+}
+.twshop-points-card__row--highlight .twshop-points-card__row-value {
+    font-weight: 700;
+}
+
+/* 購物車頁「滿額/滿件進度」區塊 */
+.twshop-cart-progress-wrapper:not(:empty) {
+    margin-bottom: 1.2em;
+}
+.twshop-cart-progress-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.twshop-cart-progress-item {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.twshop-cart-progress-text {
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: var(--theme-text-color, #444);
+}
+.twshop-cart-progress-item.is-achieved .twshop-cart-progress-text {
+    color: #2a8a3e;
+    font-weight: 600;
+}
+.twshop-cart-progress-track {
+    height: 10px;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+.twshop-cart-progress-fill {
+    height: 100%;
+    border-radius: 5px;
+    background: var(--theme-palette-color-1, #2271b1);
+    transition: width 0.3s ease;
+}
+.twshop-cart-progress-item.is-achieved .twshop-cart-progress-fill {
+    background: #2a8a3e;
+}
+
+/* 購物車頁「加購商品」／「點數兌換商品」卡片外框：兩者是刻意平行的兩份 clone
+   （twshop_render_cart_addons()，cart-injection.php／twshop_render_points_redeemable_products_section()，
+   points-engine.php），版面已經是同一套真正的 WooCommerce 商品迴圈（`content-product.php` 模板 ＋
+   主題卡片樣式）。這裡比照優惠券卡片（.visual-coupon-card，上方）的作法，用 Blocksy 主題的
+   圓角/陰影/邊框色/背景色變數包一層「卡片」外框，讓這兩個區塊在購物車頁跟其他區塊（優惠券卡片、
+   商品清單本身）視覺語言一致，不是商品格線直接裸露貼在頁面上。用分組選擇器套用同一份規則
+   （而非各自複製一份），日後調整卡片風格只需要改一處——但兩支 PHP render 函式本身仍是各自獨立的
+   兩份 clone，不因為 CSS 共用就合併。
+   `margin-top`／`clear` 原本是 PHP 端內嵌的 `style="margin-top:30px; clear:both"`，CSS 規則蓋不過
+   內嵌樣式、只能疊 `!important`，因此連同卡片樣式一併搬進這裡，PHP 端改成純 class。
+   `margin-bottom` 是新增的，讓卡片跟後面接著的購物車金額摘要區塊也有明確的呼吸空間。 */
+.twshop-cart-addons,
+.twshop-points-redeem-products {
+    margin-top: 30px;
+    margin-bottom: 20px;
+    clear: both;
+    padding: 20px;
+    border: 1px solid var(--theme-border-color, #e2e8f0);
+    border-radius: var(--theme-border-radius, 8px);
+    background: var(--theme-content-background, #fff);
+    box-shadow: var(--theme-box-shadow, 0 1px 3px rgba(0, 0, 0, 0.05));
+    box-sizing: border-box;
+}
+
+/* 卡片標題：原本只有 PHP 端內嵌的 font-size，沒有顏色/字重，容易跟周圍純文字混在一起。
+   字級沿用內嵌的 `style="font-size:var(--wp--preset--font-size--small,14px);"` 不動
+   （跟隨 WP 字級預設集是既有慣例），這裡只補顏色與字重，兩者不衝突不需要 !important。 */
+.twshop-cart-addons-title,
+.twshop-points-redeem-products-title {
+    margin: 0 0 15px;
+    color: var(--theme-text-color, #333);
+    font-weight: 600;
+}
+
+/* 極窄螢幕：卡片內距收緊，避免商品格線被過大的左右留白擠壓。沿用本檔其餘規則已經在用的
+   600px 斷點，不另外引入新的斷點值。 */
+@media screen and (max-width: 600px) {
+    .twshop-cart-addons,
+    .twshop-points-redeem-products {
+        padding: 14px;
+    }
+}
+
+.twshop-points-redeem-cost {
+    font-weight: 700;
+    color: var(--theme-link-color, #2271b1);
+}
+
+/* 購物車列表內「用點數兌換商品」項目的數量欄位（twshop_lock_redeemed_item_quantity()
+   輸出的固定文字，取代原生可編輯的數量輸入框） */
+.twshop-redeem-qty {
+    display: inline-block;
+    opacity: 0.7;
+}
