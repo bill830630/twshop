@@ -99,6 +99,27 @@ jQuery(document).ready(function($) {
         buy_x_get_y: '必填：選擇哪些商品的購買數量算進 N。'
     };
 
+    // ── 規則分類（兩層選單：先選分類，篩出「折扣與贈品類型」的選項） ──────────
+    // 分類 => 哪些 type 屬於它，唯一登記處是每個 <option data-group="..."> 屬性（PHP 端，
+    // page-discount-rules.php），這裡只讀不重複維護一份對照表。
+    function filterTypeOptions($card) {
+        var $typeSelect = $card.find('.twshop-rule-type');
+        var group = $card.find('.twshop-rule-type-group').val();
+        var $options = $typeSelect.find('option');
+        $options.prop('hidden', function() { return $(this).data('group') !== group; });
+        // 目前選的類型不屬於新分類（使用者剛切換分類）：跳到該分類第一個選項並觸發
+        // change，讓 applyTypeLayout() 等既有邏輯照常重算卡片其餘部分。
+        if ($typeSelect.find('option:selected').data('group') !== group) {
+            $typeSelect.val($options.filter('[data-group="' + group + '"]').first().val()).trigger('change');
+        }
+    }
+    // 初始化／載入既有規則時：依目前 type 反推它屬於哪個分類，讓「規則分類」選單顯示正確值。
+    function syncTypeGroup($card) {
+        var group = $card.find('.twshop-rule-type option:selected').data('group');
+        $card.find('.twshop-rule-type-group').val(group);
+        filterTypeOptions($card);
+    }
+
     function applyTypeLayout($card) {
         var type = $card.find('.twshop-rule-type').val();
         var $valueWrap = $card.find('.rule-value-wrap');
@@ -237,6 +258,7 @@ jQuery(document).ready(function($) {
         $(document.body).trigger('wc-enhanced-select-init');
         $cards.each(function() {
             var $card = $(this);
+            syncTypeGroup($card);
             applyTypeLayout($card);
             rememberSavedSchedule($card);
             var currentName = $.trim($card.find('.twshop-rule-name-input').val());
@@ -246,6 +268,7 @@ jQuery(document).ready(function($) {
         });
     }
 
+    $container.on('change', '.twshop-rule-type-group', function() { filterTypeOptions($(this).closest('.twshop-rule-form')); });
     $container.on('change', '.twshop-rule-type', function() { applyTypeLayout($(this).closest('.twshop-rule-form')); });
     $container.on('input change', '.twshop-rule-value', function() { updateValueHint($(this).closest('.twshop-rule-form')); });
     $container.on('input change', '.twshop-rule-min-amount', function() { updateLogicVisibility($(this).closest('.twshop-rule-form')); });
