@@ -119,23 +119,23 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                         // JS 直接讀屬性、不在 JS 裡另外維護一份對照表。
                         ?>
                         <select class="twshop-rule-type-group">
-                            <option value="product">商品層</option>
-                            <option value="cart">購物車層</option>
-                            <option value="gift">贈品／加購</option>
+                            <option value="product">商品</option>
+                            <option value="cart">購物車</option>
+                            <option value="gift">贈品加購</option>
                         </select>
                     </div>
                     <div class="twshop-rule-field">
                         <label class="twshop-rule-label">折扣與贈品類型</label>
                         <select name="type" class="twshop-rule-type">
-                            <option value="percent" data-group="product" <?php selected($type, 'percent'); ?>>商品單價打折 (%)</option>
-                            <option value="fixed_product" data-group="product" <?php selected($type, 'fixed_product'); ?>>商品單價折抵 ($)</option>
-                            <option value="cart_percent" data-group="cart" <?php selected($type, 'cart_percent'); ?>>整筆訂單打折 (%)</option>
-                            <option value="cart_discount" data-group="cart" <?php selected($type, 'cart_discount'); ?>>整筆訂單折抵 ($)</option>
-                            <option value="free_shipping" data-group="cart" <?php selected($type, 'free_shipping'); ?>>整單免運費</option>
-                            <option value="tiered_cart" data-group="cart" <?php selected($type, 'tiered_cart'); ?>>階梯式訂單折扣 (多門檻)</option>
+                            <option value="percent" data-group="product" <?php selected($type, 'percent'); ?>>打折 (%)</option>
+                            <option value="fixed_product" data-group="product" <?php selected($type, 'fixed_product'); ?>>折抵 ($)</option>
+                            <option value="cart_percent" data-group="cart" <?php selected($type, 'cart_percent'); ?>>打折 (%)</option>
+                            <option value="cart_discount" data-group="cart" <?php selected($type, 'cart_discount'); ?>>折抵 ($)</option>
+                            <option value="free_shipping" data-group="cart" <?php selected($type, 'free_shipping'); ?>>免運費</option>
+                            <option value="tiered_cart" data-group="cart" <?php selected($type, 'tiered_cart'); ?>>階梯式折扣 (多門檻)</option>
                             <option value="free_gift" data-group="gift" <?php selected($type, 'free_gift'); ?>>滿額/條件贈品 (自動加入購物車)</option>
-                            <option value="addon_product" data-group="gift" <?php selected($type, 'addon_product'); ?>>加購商品 (符合條件以特價購買)</option>
-                            <option value="buy_x_get_y" data-group="gift" <?php selected($type, 'buy_x_get_y'); ?>>買N送N (指定範圍內最便宜M件免費)</option>
+                            <option value="addon_product" data-group="gift" <?php selected($type, 'addon_product'); ?>>加購商品 (特價購買)</option>
+                            <option value="buy_x_get_y" data-group="gift" <?php selected($type, 'buy_x_get_y'); ?>>買N送N (最便宜M件免費)</option>
                         </select>
                     </div>
                     <div class="twshop-rule-field rule-value-wrap">
