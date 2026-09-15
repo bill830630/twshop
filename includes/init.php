@@ -23,11 +23,33 @@ function twshop_core_init_registration() {
 
     add_rewrite_endpoint( 'my-coupons', EP_ROOT | EP_PAGES );
     add_rewrite_endpoint( 'my-membership', EP_ROOT | EP_PAGES );
+    // my-wallet（儲值金，v25.8.61 新增）刻意無條件註冊，不看 wallet 模組開關——
+    // rewrite endpoint 只是「讓這個網址被解析出對應 query var」，跟模組開關無關，
+    // 真正決定要不要輸出內容的是 woocommerce_account_my-wallet_endpoint 這個 action
+    // 有沒有掛（掛在模組開關底下，見下方）。這裡若也看開關，會在「開了又關」的情境下
+    // 讓已經被搜尋引擎收錄或加入書籤的網址結構跟著開關忽有忽無，沒有必要。
+    add_rewrite_endpoint( 'my-wallet', EP_ROOT | EP_PAGES );
 }
 
-add_filter( 'woocommerce_get_query_vars', function($vars) { $vars['my-coupons'] = 'my-coupons'; $vars['my-membership'] = 'my-membership'; return $vars; }, 0 );
+add_filter( 'woocommerce_get_query_vars', function($vars) { $vars['my-coupons'] = 'my-coupons'; $vars['my-membership'] = 'my-membership'; $vars['my-wallet'] = 'my-wallet'; return $vars; }, 0 );
 register_activation_hook( TWSHOP_PLUGIN_FILE, 'twshop_flush_rewrite_rules_on_activation' );
 function twshop_flush_rewrite_rules_on_activation() { twshop_core_init_registration(); flush_rewrite_rules(); }
+
+/**
+ * my-wallet 是 v25.8.61 才新增的 rewrite endpoint。activation hook 只在「外掛從沒啟用
+ * 到啟用」那一刻觸發一次，既有站台這次只是更新版本，不會重新觸發，既有的 rewrite rules
+ * 快取裡不會有這個 endpoint——會員中心的「儲值金」頁籤即使正確顯示在選單裡，點進去也會
+ * 404。比照 wallet 資料表的 admin_init 版本比對慣例，這裡也用一個一次性 option 旗標，
+ * 確保只要網站曾經升級到含這個 endpoint 的版本，就會在下一次後台請求時補跑一次
+ * flush_rewrite_rules()，不需要管理員自己手動去「設定 ▸ 固定網址」重新儲存一次。
+ */
+function twshop_wallet_maybe_flush_rewrite_rules() {
+    if ( ! get_option( 'twshop_wallet_endpoint_flushed' ) ) {
+        flush_rewrite_rules();
+        update_option( 'twshop_wallet_endpoint_flushed', '1' );
+    }
+}
+add_action( 'admin_init', 'twshop_wallet_maybe_flush_rewrite_rules' );
 
 add_action( 'plugins_loaded', 'twshop_membership_init' );
 add_action( 'admin_notices', 'twshop_woocommerce_missing_notice' );
@@ -245,6 +267,17 @@ function twshop_membership_init() {
         add_action( 'woocommerce_review_order_after_order_total', 'twshop_display_estimated_points_earn' );
         add_action( 'wc_membership_daily_downgrade_check', 'twshop_points_daily_expiry_check' );
         add_action( 'twshop_send_points_expiry_notice', 'twshop_send_points_expiry_notice_email', 10, 3 );
+    }
+
+    // ── 儲值金（v25.8.61 新增。目前只有第一階段：核心帳本、後台使用者個人資料頁
+    //    手動加扣、會員中心「我的儲值金」頁籤。購物車折抵／線上儲值／退款自動退回等
+    //    第二、三階段完成後會再擴充這個區塊，見 CLAUDE.md「儲值金模組」一節）────
+    if ( twshop_module_enabled( 'wallet' ) ) {
+        add_action( 'profile_personal_options', 'twshop_wallet_user_profile_management_ui' );
+        add_action( 'edit_user_profile', 'twshop_wallet_user_profile_management_ui' );
+        add_action( 'personal_options_update', 'twshop_wallet_save_user_profile_management' );
+        add_action( 'edit_user_profile_update', 'twshop_wallet_save_user_profile_management' );
+        add_action( 'woocommerce_account_my-wallet_endpoint', 'twshop_my_wallet_endpoint_content' );
     }
 
     // ── 結帳與訂單管理強化（台灣地址、超商取貨、訂單物流資訊、訂單管理後台強化，

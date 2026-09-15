@@ -388,7 +388,7 @@ function twshop_recalculate_user_tier( $user_id ) {
  * 會員中心頁籤預設順序（未曾在後台儲存過排序設定時使用，與升級前的固定順序一致）
  */
 function twshop_get_default_account_tab_order() {
-    return array( 'my-membership', 'my-coupons', 'orders', 'edit-account', 'edit-address', 'dashboard', 'downloads' );
+    return array( 'my-membership', 'my-coupons', 'my-wallet', 'orders', 'edit-account', 'edit-address', 'dashboard', 'downloads' );
 }
 
 /**
@@ -405,6 +405,9 @@ function twshop_get_all_registered_account_tabs() {
     }
     if ( twshop_module_enabled( 'visual_coupons' ) ) {
         $items['my-coupons'] = twshop_option( 'wc_general_tab_name' );
+    }
+    if ( twshop_module_enabled( 'wallet' ) ) {
+        $items['my-wallet'] = '儲值金';
     }
 
     return twshop_apply_account_tab_name_overrides( $items );
@@ -518,6 +521,9 @@ function twshop_modify_account_menu_items( $items ) {
     }
     if ( twshop_module_enabled( 'visual_coupons' ) ) {
         $items['my-coupons'] = twshop_option( 'wc_general_tab_name' );
+    }
+    if ( twshop_module_enabled( 'wallet' ) ) {
+        $items['my-wallet'] = '儲值金';
     }
     $items = twshop_apply_account_tab_name_overrides( $items );
 
