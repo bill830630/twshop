@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
-# build.sh — 打包 twshop 客戶安裝包，取代原本 CLAUDE.md 記載的人工 zip 指令。
+# build.sh — 打包 ultimate-ecommerce 客戶安裝包，取代原本 CLAUDE.md 記載的人工 zip 指令。
 #
-# 用途：從外掛根目錄（本檔案所在位置）產生給客戶的 twshop.zip，輸出到
-#   /Volumes/work/外掛開發/twshop.zip
+# 用途：從外掛根目錄（本檔案所在位置）產生給客戶的 ultimate-ecommerce.zip，輸出到
+#   /Volumes/work/外掛開發/ultimate-ecommerce.zip
 #
 # 排除項目：
 #   - .git/                                  版本控制內部資料，不該出現在安裝包
 #   - *.DS_Store                              macOS 系統雜訊檔（模式要涵蓋子目錄：原本寫成
-#                                             "twshop/.DS_Store" 只擋得到最上層那一個，
+#                                             "ultimate-ecommerce/.DS_Store" 只擋得到最上層那一個，
 #                                             assets/.DS_Store 就這樣被打進過客戶安裝包）
 #   - license-server/                         2026-09 外掛端授權系統整個移除後，這個目錄
 #                                             已無程式碼呼叫，純粹是還留在磁碟上的孤兒目錄；
@@ -40,7 +40,7 @@ PLUGIN_DIR_NAME="$(basename "$SCRIPT_DIR")"
 PARENT_DIR="$(dirname "$SCRIPT_DIR")"
 
 OUTPUT_DIR="/Volumes/work/外掛開發"
-OUTPUT_ZIP="$OUTPUT_DIR/twshop.zip"
+OUTPUT_ZIP="$OUTPUT_DIR/ultimate-ecommerce.zip"
 
 # --- 前置檢查：輸出目錄是否存在（/Volumes/work/ 可能未掛載） -----------------------
 if [ ! -d "$OUTPUT_DIR" ]; then
@@ -53,7 +53,7 @@ echo "打包目錄：$SCRIPT_DIR"
 echo "輸出檔案：$OUTPUT_ZIP"
 
 # --- 打包 -------------------------------------------------------------------------
-# 從外掛的上層目錄執行 zip，讓 zip 內容以 "twshop/xxx" 為相對路徑，符合客戶端安裝時
+# 從外掛的上層目錄執行 zip，讓 zip 內容以 "ultimate-ecommerce/xxx" 為相對路徑，符合客戶端安裝時
 # 直接解壓縮進 wp-content/plugins/ 的預期結構。
 cd "$PARENT_DIR"
 

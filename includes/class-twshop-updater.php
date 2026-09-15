@@ -3,7 +3,7 @@
  * 自架更新通道：讓外掛能像 WordPress.org 上的外掛一樣，在後台「外掛」頁顯示更新提示。
  *
  * 底層用 YahnisElsts/plugin-update-checker（`vendor/plugin-update-checker/`）串接公開的
- * GitHub repo（bill830630/twshop），比對 repo 的 GitHub Release 版本與目前安裝的
+ * GitHub repo（bill830630/ultimate-ecommerce），比對 repo 的 GitHub Release 版本與目前安裝的
  * `Version:` 標頭，有新版就照 WordPress 原生的更新流程走（後台顯示「有可用的更新」、
  * 一鍵更新會直接抓 Release 附加的 zip 覆蓋安裝）。架構比照 ultimate-login 的
  * `WCLON_Updater`（`ultimate-login/includes/class-wclon-updater.php`），該外掛已在
@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class TWSHOP_Updater {
 
-    const GITHUB_REPO_SLUG        = 'bill830630/twshop';
+    const GITHUB_REPO_SLUG        = 'bill830630/ultimate-ecommerce';
     const DISABLED_LIST_CACHE_KEY = 'twshop_update_disabled_sites';
     const DISABLED_LIST_CACHE_TTL = 6 * HOUR_IN_SECONDS;
 
@@ -43,7 +43,7 @@ class TWSHOP_Updater {
         $update_checker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
             'https://github.com/' . self::GITHUB_REPO_SLUG . '/',
             TWSHOP_PLUGIN_FILE,
-            'twshop'
+            'ultimate-ecommerce'
         );
 
         if ( defined( 'TWSHOP_GITHUB_TOKEN' ) && '' !== TWSHOP_GITHUB_TOKEN ) {

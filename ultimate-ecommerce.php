@@ -3,7 +3,7 @@
  * Plugin Name: 終極電商 (Ultimate E-commerce)
  * Plugin URI: https://nibill-studio.com/
  * Description: 具備會員分級、動態折扣規則、優惠卡券、紅利點數系統、智能贈品與加購引擎的終極電商。
- * Version: 25.8.50
+ * Version: 25.8.51
  * Author: NiBill
  * Author URI: https://nibill-studio.com/
  * Text Domain: ultimate-ecommerce
@@ -21,9 +21,9 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *
  *   - register_activation_hook( __FILE__, ... ) 的 hook 名稱是
  *     'activate_' . plugin_basename( $file )，檔案一換，掛勾名稱就變成
- *     activate_twshop/includes/xxx.php，WordPress 啟用外掛時永遠不會觸發它，
+ *     activate_ultimate-ecommerce/includes/xxx.php，WordPress 啟用外掛時永遠不會觸發它，
  *     不會有任何錯誤訊息。
- *   - TWSHOP_PLUGIN_URL . 'assets/...' 會變成 .../twshop/includes/assets/...，
+ *   - TWSHOP_PLUGIN_URL . 'assets/...' 會變成 .../ultimate-ecommerce/includes/assets/...，
  *     前端 CSS/JS 全部 404，PHP 端毫無異狀。
  *   - FeaturesUtil::declare_compatibility( 'custom_order_tables', __FILE__ ) 認的是
  *     主外掛檔，換成子檔案等於沒宣告，WooCommerce 會把本外掛列為 HPOS 不相容。
