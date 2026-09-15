@@ -205,6 +205,10 @@ function twshop_register_settings() {
     // （mapping／log 頁籤純 AJAX，無對應 group）。
     register_setting( 'twshop_shopee_credentials_group', 'twshop_shopee_credentials', 'twshop_sanitize_shopee_credentials' );
     register_setting( 'twshop_shopee_sync_group', 'twshop_shopee_sync_settings', 'twshop_sanitize_shopee_sync_settings' );
+    // 蝦皮串接總開關（v25.8.65 新增，見 page-shopee.php 檔頭說明）——獨立 group，因為它是
+    // 「系統設定 ▸ 蝦皮串接」頁籤最上面那個獨立 <form>，跟下面授權/同步設定各自的
+    // <form> 不是同一個送出動作。
+    register_setting( 'wc_shopee_enable_group', 'wc_shopee_sync_enabled', 'twshop_sanitize_yes_no' );
 }
 
 /**

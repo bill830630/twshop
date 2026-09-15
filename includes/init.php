@@ -406,10 +406,12 @@ function twshop_membership_init() {
     // 整個吞掉，使用者只看到按鈕沒反應、沒有任何錯誤訊息。
     add_action( 'wp_ajax_twshop_batch_product_slugs', 'twshop_ajax_batch_product_slugs' );
 
-    // ── 蝦皮串接 ──────────────────────────────────────────────────────────
-    // 授權回呼／token 續期／建表升級校正／排程對帳這幾支不在這裡：它們刻意不受模組開關
+    // ── 蝦皮串接（v25.8.65 起改由「系統設定 ▸ 蝦皮串接」頁籤自己的 wc_shopee_sync_enabled
+    //    開關控制，不再是「系統設定 ▸ 模組開關」裡的一個模組，見 CLAUDE.md「蝦皮串接模組」
+    //    一節）─────────────────────────────────────────────────────────
+    // 授權回呼／token 續期／建表升級校正／排程對帳這幾支不在這裡：它們刻意不受這顆開關
     // 影響，直接在 includes/modules/shopee-api.php 頂層註冊，理由見該檔案內註解。
-    if ( twshop_module_enabled( 'shopee_sync' ) ) {
+    if ( twshop_shopee_sync_enabled() ) {
         // Woo → 蝦皮：庫存/價格異動進待推送佇列，不在 hook 內直接打 API（結帳流程中同步
         // 打外部 API 會拖慢結帳，蝦皮逾時還會讓下單卡住），交給 5 分鐘 cron 批次處理。
         add_action( 'woocommerce_product_set_stock', 'twshop_shopee_queue_push_from_hook' );

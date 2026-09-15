@@ -1,9 +1,8 @@
 <?php
 /**
- * 介面：儲值金（儲值方案、與等級消費額相關的設定）。
+ * 介面：儲值金（會員餘額查詢、交易紀錄、儲值方案、設定，四個頁籤）。
  *
- * 會員餘額搜尋／交易紀錄列表／Email 通知仍在第四階段，尚未實作——目前這個頁面只有
- * 線上儲值需要的「方案」與「設定」兩個頁籤，見 CLAUDE.md「儲值金模組」一節的階段說明。
+ * 詳見 CLAUDE.md「儲值金模組」一節的階段說明與各頁籤細節。
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -23,31 +22,6 @@ function twshop_wallet_render_page() {
         elseif ( 'plans' === $current ) twshop_wallet_plans_tab();
         elseif ( 'settings' === $current ) twshop_wallet_settings_tab();
     } );
-}
-
-/**
- * 會員搜尋欄位，重用 WooCommerce 核心已經註冊好的 `woocommerce_json_search_customers`
- * AJAX action（跟訂單編輯頁「客戶」欄位、訂單列表篩選同一套元件），不用自己另外寫
- * 搜尋後端。已選會員的顯示格式比照 WooCommerce 核心（`class-wc-meta-box-order-data.php`）
- * 「姓名 (#ID – Email)」的既有慣例，讓管理員在不同頁面看到的呈現方式一致。
- */
-function twshop_render_wallet_customer_search_field( $name, $selected_user_id = 0 ) {
-    $user_string = '';
-    if ( $selected_user_id ) {
-        $user = get_userdata( $selected_user_id );
-        if ( $user ) {
-            $customer    = new WC_Customer( $selected_user_id );
-            $full_name   = trim( $customer->get_first_name() . ' ' . $customer->get_last_name() );
-            $user_string = sprintf( '%s (#%d – %s)', $full_name ?: $user->display_name, $selected_user_id, $user->user_email );
-        }
-    }
-    ?>
-    <select class="wc-customer-search" name="<?php echo esc_attr( $name ); ?>" data-placeholder="搜尋會員姓名／Email" data-allow_clear="true" style="width:320px;">
-        <?php if ( $selected_user_id && $user_string ) : ?>
-            <option value="<?php echo esc_attr( $selected_user_id ); ?>" selected="selected"><?php echo esc_html( $user_string ); ?></option>
-        <?php endif; ?>
-    </select>
-    <?php
 }
 
 function twshop_wallet_render_ledger_table_rows( $rows, $show_user_column = false ) {
@@ -89,7 +63,7 @@ function twshop_wallet_balances_tab() {
             <form method="get">
                 <input type="hidden" name="page" value="twshop-wallet">
                 <input type="hidden" name="tab" value="balances">
-                <?php twshop_render_wallet_customer_search_field( 'user_id', $user_id ); ?>
+                <?php twshop_render_customer_search_field( 'user_id', $user_id ); ?>
                 <button type="submit" class="button">查看</button>
             </form>
         </div>
@@ -191,7 +165,7 @@ function twshop_wallet_ledger_tab() {
                 <div style="display:flex; flex-wrap:wrap; gap:15px; align-items:flex-end;">
                     <div>
                         <label style="display:block; font-weight:bold; margin-bottom:5px;">會員</label>
-                        <?php twshop_render_wallet_customer_search_field( 'user_id', $user_id ); ?>
+                        <?php twshop_render_customer_search_field( 'user_id', $user_id ); ?>
                     </div>
                     <div>
                         <label style="display:block; font-weight:bold; margin-bottom:5px;">類型</label>

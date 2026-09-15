@@ -20,8 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 function twshop_admin_external_scripts($hook) {
     $twshop_pages = array(
         'wc-general-settings', 'twshop-member-tiers', 'twshop-discount-rules',
-        'twshop-visual-coupons', 'twshop-points', 'twshop-system', 'twshop-shopee',
-        'twshop-wallet',
+        'twshop-visual-coupons', 'twshop-points', 'twshop-system', 'twshop-wallet',
     );
 
     $on_page = false;
@@ -279,6 +278,34 @@ function twshop_render_product_search_field( $name, $selected_ids, $multiple = f
     </select>
     <?php
     return ob_get_clean();
+}
+
+/**
+ * 會員搜尋欄位，重用 WooCommerce 核心已經註冊好的 `woocommerce_json_search_customers`
+ * AJAX action（跟訂單編輯頁「客戶」欄位、訂單列表「依會員篩選」同一套元件），不用自己
+ * 寫搜尋後端。已選會員的顯示格式（`姓名 (#ID – Email)`）比照 WooCommerce 核心
+ * `class-wc-meta-box-order-data.php` 的既有慣例，跟其他頁面看到的呈現方式一致。
+ *
+ * 儲值金「會員餘額」頁籤（v25.8.64）與紅利點數「會員餘額」頁籤共用這支，原本各自
+ * 內嵌一份幾乎相同的實作，抽成共用 helper 避免日後改一處漏改另一處。
+ */
+function twshop_render_customer_search_field( $name, $selected_user_id = 0 ) {
+    $user_string = '';
+    if ( $selected_user_id ) {
+        $user = get_userdata( $selected_user_id );
+        if ( $user ) {
+            $customer    = new WC_Customer( $selected_user_id );
+            $full_name   = trim( $customer->get_first_name() . ' ' . $customer->get_last_name() );
+            $user_string = sprintf( '%s (#%d – %s)', $full_name ?: $user->display_name, $selected_user_id, $user->user_email );
+        }
+    }
+    ?>
+    <select class="wc-customer-search" name="<?php echo esc_attr( $name ); ?>" data-placeholder="搜尋會員姓名／Email" data-allow_clear="true" style="width:320px;">
+        <?php if ( $selected_user_id && $user_string ) : ?>
+            <option value="<?php echo esc_attr( $selected_user_id ); ?>" selected="selected"><?php echo esc_html( $user_string ); ?></option>
+        <?php endif; ?>
+    </select>
+    <?php
 }
 
 // 「先選限制類型、再依類型複選項目」的共用元件（單一設定欄位取代多個各自獨立的類型欄位）；

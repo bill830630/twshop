@@ -83,9 +83,9 @@ function twshop_register_menus() {
     if ( twshop_module_enabled( 'points' ) ) {
         add_submenu_page( 'wc-general-settings', '紅利點數', '紅利點數', 'manage_woocommerce', 'twshop-points', 'twshop_points_render_page' );
     }
-    if ( twshop_module_enabled( 'shopee_sync' ) ) {
-        add_submenu_page( 'wc-general-settings', '蝦皮串接', '蝦皮串接', 'manage_woocommerce', 'twshop-shopee', 'twshop_shopee_render_page' );
-    }
+    // 蝦皮串接（v25.8.65 起不再是獨立頂層選單／不再受模組開關影響）移到「系統設定 ▸
+    // 蝦皮串接」頁籤，見 twshop_system_render_page()（pages.php）與 CLAUDE.md「蝦皮串接
+    // 模組」一節。
     if ( twshop_module_enabled( 'wallet' ) ) {
         add_submenu_page( 'wc-general-settings', '儲值金', '儲值金', 'manage_woocommerce', 'twshop-wallet', 'twshop_wallet_render_page' );
     }

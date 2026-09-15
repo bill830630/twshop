@@ -280,6 +280,7 @@ function twshop_get_option_defaults() {
         'wc_wallet_tier_spend_full_amount' => 'yes',
         'wc_wallet_topup_email_enabled' => 'yes',
         'wc_wallet_topup_email_subject' => '儲值成功通知',
+        'wc_shopee_sync_enabled'        => 'no',
     );
     return $defaults;
 }
@@ -481,10 +482,9 @@ function twshop_get_module_definitions() {
             'label' => '訂單強化',
             'desc'  => '台灣地址下拉選單、超商取貨免填地址、訂單物流資訊顯示與搜尋、自訂訂單狀態、批次操作、物流貨態自動完成訂單',
         ),
-        'shopee_sync' => array(
-            'label' => '蝦皮串接',
-            'desc'  => 'Woo 庫存/價格推送蝦皮、蝦皮訂單自動匯入為 Woo 訂單、商品 SKU 對應',
-        ),
+        // 蝦皮串接（原 shopee_sync 模組）v25.8.65 起移出模組開關系統，改成「系統設定 ▸
+        // 蝦皮串接」頁籤裡的獨立開關 wc_shopee_sync_enabled，見 twshop_shopee_sync_enabled()
+        // （shopee-api.php）與 CLAUDE.md「蝦皮串接模組」一節。
     );
 }
 

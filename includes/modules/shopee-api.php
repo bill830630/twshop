@@ -60,6 +60,17 @@ function twshop_shopee_has_credentials() {
     return ! empty( $creds['partner_id'] ) && ! empty( $creds['partner_key'] );
 }
 
+/**
+ * 蝦皮串接總開關（v25.8.65 起取代原本的 `shopee_sync` 模組開關）。「系統設定 ▸ 蝦皮串接」
+ * 頁籤自己的一顆 checkbox（`wc_shopee_sync_enabled`，group `wc_shopee_enable_group`），
+ * 不再受「系統設定 ▸ 模組開關」影響——蝦皮串接需要另外申請 partner key 才能真正運作，
+ * 跟其餘一啟用就能用的功能模組性質不同，獨立出來讓管理員不用先跑一趟「模組開關」頁。
+ * 所有原本檢查 `twshop_module_enabled('shopee_sync')` 的地方都要改呼叫這支。
+ */
+function twshop_shopee_sync_enabled() {
+    return 'yes' === twshop_option( 'wc_shopee_sync_enabled' );
+}
+
 // =========================================================================
 // 資料表：dbDelta 建表 + 版本升級校正
 // =========================================================================
@@ -190,13 +201,15 @@ function twshop_shopee_deactivation_cron() {
 add_action( 'twshop_shopee_refresh_token', 'twshop_shopee_maybe_refresh_token' );
 
 /**
- * push_queue／pull_orders／cleanup_log 三支排程**受模組開關控制**，但模組開關頁是獨立
- * <form> + 手動 $_POST 處理（不走 Settings API），沒有一個統一的「儲存後」掛勾可以攔。
- * 沿用 twshop_maybe_realign_daily_cron_to_midnight() 的既有寫法：掛 admin_init，每次後台
- * 請求校正一次「模組開關現況」與「排程現況」是否一致，該排的補排、該清的清掉。
+ * push_queue／pull_orders／cleanup_log 三支排程**受 `wc_shopee_sync_enabled` 開關控制**
+ * （v25.8.65 起，原本是模組開關）。這顆開關走一般 Settings API（`options.php`），本來就有
+ * 「儲存後」的請求可以掛，但沿用改版前 `twshop_maybe_realign_daily_cron_to_midnight()` 的
+ * 既有寫法——掛 `admin_init`，每次後台請求校正一次「開關現況」與「排程現況」是否一致，
+ * 該排的補排、該清的清掉，理由是這樣同時涵蓋「透過資料庫直接改值」「舊資料庫升級後開關
+ * 狀態改變」等非典型路徑，比只掛存檔那個瞬間更保險。
  */
 function twshop_shopee_reconcile_module_cron() {
-    $enabled = twshop_module_enabled( 'shopee_sync' );
+    $enabled = twshop_shopee_sync_enabled();
 
     $jobs = array(
         'twshop_shopee_push_queue'  => 'twshop_shopee_5min',
@@ -214,6 +227,27 @@ function twshop_shopee_reconcile_module_cron() {
     }
 }
 add_action( 'admin_init', 'twshop_shopee_reconcile_module_cron' );
+
+/**
+ * 一次性遷移（v25.8.65）：既有站台若在改版前就已經在「系統設定 ▸ 模組開關」打開過
+ * `shopee_sync`，這裡把狀態原樣搬到新的 `wc_shopee_sync_enabled`，避免更新外掛後
+ * 蝦皮串接從「已啟用」變成新開關的預設值「未啟用」，同步/推送悄悄停掉卻沒有任何
+ * 錯誤訊息（跟 v25.8.61 新增 `my-wallet` endpoint 時的既有教訓同一個道理：任何「把
+ * 控制點從一個地方搬到另一個地方」的改動，都要記得幫既有站台把值也搬過去，不能只
+ * 讓新開關生效）。用一次性 option 旗標確保只搬一次；`twshop_module_settings` 本身
+ * 保留不刪（`shopee_sync` 這個 key 變成無人讀取的孤兒資料，但清掉它沒有實質好處，
+ * 徒增「這個 option 是不是還有別的地方在用」的疑慮，不刪比較安全）。
+ */
+function twshop_shopee_maybe_migrate_enable_flag() {
+    if ( get_option( 'twshop_shopee_sync_enable_migrated' ) ) return;
+
+    $old_modules = get_option( 'twshop_module_settings', array() );
+    if ( isset( $old_modules['shopee_sync'] ) && '1' === $old_modules['shopee_sync'] ) {
+        update_option( 'wc_shopee_sync_enabled', 'yes' );
+    }
+    update_option( 'twshop_shopee_sync_enable_migrated', '1' );
+}
+add_action( 'admin_init', 'twshop_shopee_maybe_migrate_enable_flag' );
 
 // =========================================================================
 // 簽章與節流
@@ -339,6 +373,17 @@ function twshop_shopee_request( $path, $args = array(), $method = 'GET', $with_s
 // =========================================================================
 
 /**
+ * 蝦皮串接頁面（v25.8.65 起是「系統設定 ▸ 蝦皮串接」頁籤，不再是獨立的 `twshop-shopee`
+ * 頂層頁面）的網址組成，統一收在這支，避免 OAuth 回呼/重導向與頁面內部連結各自拼一份、
+ * 改頁面結構時漏改其中一處。`$subtab` 對應 twshop_shopee_settings_tab()（page-shopee.php）
+ * 認得的 `auth`/`mapping`/`sync`/`log`。
+ */
+function twshop_shopee_admin_url( $subtab = 'auth', $args = array() ) {
+    $url = admin_url( 'admin.php?page=twshop-system&tab=shopee&subtab=' . $subtab );
+    return $args ? add_query_arg( $args, $url ) : $url;
+}
+
+/**
  * 授權流程的一次性 `state` 存放位置，**key 綁 user ID**。
  *
  * 綁使用者是刻意的：`state` 要擋的正是「甲管理員被誘導去載入乙（攻擊者）準備好的回呼網址」，
@@ -352,17 +397,20 @@ function twshop_shopee_auth_state_key() {
  * 授權網址。`redirect` 上帶一個一次性隨機 `state`，回呼時比對——這是整個授權流程的
  * CSRF 防線，理由與攻擊情境見 `twshop_shopee_handle_auth_callback()`。
  *
- * **蝦皮會原樣帶回 `redirect` 上的查詢字串**：現行回呼的第一道判斷就是
- * `$_GET['page'] !== 'twshop-shopee'` 就 return，而 `page` 正是寫在 `redirect` 查詢字串裡的，
- * 也就是說「查詢參數會被保留」本來就是這個流程能運作的前提。
+ * **蝦皮會原樣帶回 `redirect` 上的查詢字串**：現行回呼的第一道判斷就是比對
+ * `$_GET['page']`／`$_GET['tab']` 是否為 `twshop-system`／`shopee`，而這兩個都是寫在
+ * `redirect` 查詢字串裡的，也就是說「查詢參數會被保留」本來就是這個流程能運作的前提。
  *
  * **外層必須用 `http_build_query()`，不能用 `add_query_arg()`**（2026-09 加 `state` 時實測抓到）：
  * WordPress 的 `add_query_arg()` **不做 URL 編碼**（`build_query()` 傳給 `_http_build_query()` 的
- * `$urlencode` 是 false），`redirect` 的值會原樣拼進外層查詢字串。單看舊版沒事，是因為
- * `redirect=http://…/admin.php?page=twshop-shopee` 裡的 `?` 不是查詢分隔符，整段剛好活了下來；
- * 但只要 redirect 裡出現 `&`，後面那一截就會脫離 redirect、變成**蝦皮請求自己的頂層參數**，
- * 蝦皮直接忽略。也就是說 `state` 根本不會被帶去、回呼永遠拿不到，
- * 而畫面上只會顯示「授權驗證失敗」，看不出跟編碼有關。
+ * `$urlencode` 是 false），`redirect` 的值會原樣拼進外層查詢字串。`redirect` 網址本身含
+ * `&`（`page=twshop-system&tab=shopee&subtab=auth&state=…`）時，若外層也用 `add_query_arg()`
+ * 疊上去，後面那一截會脫離 `redirect`、變成**蝦皮請求自己的頂層參數**，蝦皮直接忽略。
+ * 也就是說 `state` 根本不會被帶去、回呼永遠拿不到，而畫面上只會顯示「授權驗證失敗」，
+ * 看不出跟編碼有關——這是 v25.8.65 把頁面從獨立的 `twshop-shopee`（網址本身沒有 `&`）
+ * 搬進「系統設定」子頁籤（網址天生就帶 `&`）後，這個既有陷阱變得更容易踩到的地方，
+ * 務必維持下面這個外層 `http_build_query( …, PHP_QUERY_RFC3986 )` 的寫法不要改回
+ * `add_query_arg()`。
  *
  * 15 分鐘 TTL：授權要跳去蝦皮登入、選賣場、按確認，給足時間；過期就重按一次授權。
  */
@@ -375,7 +423,7 @@ function twshop_shopee_get_auth_url() {
     $state = wp_generate_password( 32, false );
     set_transient( twshop_shopee_auth_state_key(), $state, 15 * MINUTE_IN_SECONDS );
 
-    $redirect = add_query_arg( 'state', $state, admin_url( 'admin.php?page=twshop-shopee' ) );
+    $redirect = twshop_shopee_admin_url( 'auth', array( 'state' => $state ) );
 
     return twshop_shopee_host() . $path . '?' . http_build_query(
         array(
@@ -397,13 +445,13 @@ function twshop_shopee_get_auth_url() {
  */
 function twshop_shopee_handle_auth_callback() {
     if ( ! is_admin() ) return;
-    if ( ! isset( $_GET['page'] ) || 'twshop-shopee' !== $_GET['page'] ) return;
+    if ( ! isset( $_GET['page'], $_GET['tab'] ) || 'twshop-system' !== $_GET['page'] || 'shopee' !== $_GET['tab'] ) return;
     if ( empty( $_GET['code'] ) || empty( $_GET['shop_id'] ) ) return;
     if ( ! current_user_can( 'manage_woocommerce' ) ) return;
 
     // ── CSRF 防線：一次性 state ───────────────────────────────────────────
     // 光有 current_user_can() 擋不住這種攻擊：誘使一位已登入的管理員載入
-    // /wp-admin/admin.php?page=twshop-shopee&code=<攻擊者的>&shop_id=<攻擊者的>，
+    // /wp-admin/admin.php?page=twshop-system&tab=shopee&code=<攻擊者的>&shop_id=<攻擊者的>，
     // 底下那段 update_option() 就會把本站綁到**攻擊者的蝦皮賣場**上。後果不只是資料外洩——
     // 之後庫存/價格會推去攻擊者的賣場，訂單輪詢還會把攻擊者控制的蝦皮訂單當成真實 Woo 訂單
     // 用 wc_create_order() 建進來、實際扣掉庫存。
@@ -458,7 +506,7 @@ function twshop_shopee_handle_auth_callback() {
         'authorized_at' => $now,
     ) );
 
-    wp_safe_redirect( admin_url( 'admin.php?page=twshop-shopee&tab=auth&shopee_authorized=1' ) );
+    wp_safe_redirect( twshop_shopee_admin_url( 'auth', array( 'shopee_authorized' => 1 ) ) );
     exit;
 }
 add_action( 'admin_init', 'twshop_shopee_handle_auth_callback' );
@@ -519,7 +567,7 @@ function twshop_shopee_maybe_refresh_token() {
 // =========================================================================
 
 function twshop_shopee_handle_manual_refresh() {
-    if ( ! isset( $_GET['page'] ) || 'twshop-shopee' !== $_GET['page'] ) return;
+    if ( ! isset( $_GET['page'], $_GET['tab'] ) || 'twshop-system' !== $_GET['page'] || 'shopee' !== $_GET['tab'] ) return;
     if ( ! isset( $_GET['twshop_shopee_manual_refresh'] ) ) return;
     if ( ! current_user_can( 'manage_woocommerce' ) ) return;
     check_admin_referer( 'twshop_shopee_manual_refresh' );
@@ -527,7 +575,7 @@ function twshop_shopee_handle_manual_refresh() {
     $result = twshop_shopee_refresh_token();
     $status = is_wp_error( $result ) ? 'error' : 'success';
 
-    wp_safe_redirect( admin_url( 'admin.php?page=twshop-shopee&tab=auth&refresh=' . $status ) );
+    wp_safe_redirect( twshop_shopee_admin_url( 'auth', array( 'refresh' => $status ) ) );
     exit;
 }
 add_action( 'admin_init', 'twshop_shopee_handle_manual_refresh' );

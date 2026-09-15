@@ -19,6 +19,131 @@ function twshop_points_term() {
 }
 
 /**
+ * 依點數餘額排序的會員清單（前 $limit 名），供「會員餘額」頁籤的總覽表格使用。
+ * 點數餘額存在 user meta（`twshop_reward_points`），不是自建資料表——跟儲值金模組的
+ * `twshop_wallet_get_balances_overview()`（直接查自建 balances 表）不同，這裡改用
+ * `WP_User_Query` 的 `meta_key`/`orderby=meta_value_num` 排序，是 WordPress 對「依
+ * usermeta 數值排序找會員」的標準做法。
+ */
+function twshop_points_get_balances_overview( $limit = 50 ) {
+    $query = new WP_User_Query( array(
+        'meta_key'     => 'twshop_reward_points',
+        'meta_value'   => 0,
+        'meta_compare' => '>',
+        'meta_type'    => 'SIGNED',
+        'orderby'      => 'meta_value_num',
+        'order'        => 'DESC',
+        'number'       => $limit,
+        'fields'       => array( 'ID', 'display_name', 'user_email' ),
+    ) );
+    return $query->get_results();
+}
+
+/**
+ * 頁籤：會員餘額（v25.8.65 新增，比照儲值金「會員餘額」頁籤的既有版面）。純讀取，
+ * 不對應任何 settings group。搜尋欄位重用 `twshop_render_customer_search_field()`
+ * （`ui-components.php`，原本是儲值金頁專用，這次抽成共用 helper）。
+ *
+ * 「前往手動調整」連到使用者個人資料頁的既有手動加減點數 UI（`twshop_user_profile_
+ * management_ui()`，`#twshop-points-management`）——這段 UI 目前掛在 `member_tiers`
+ * 模組開關底下（不是 `points`，見 CLAUDE.md 既有記載的既有落差），若站台只開了 `points`
+ * 模組、關掉 `member_tiers`，這個連結會連到一個不存在的錨點。這是既有的跨模組耦合，
+ * 這次沒有一併修正，維持現況。
+ */
+function twshop_points_balances_tab() {
+    $user_id = isset( $_GET['user_id'] ) ? absint( $_GET['user_id'] ) : 0;
+    $term    = twshop_points_term();
+    ?>
+    <div class="twshop-panel">
+        <?php twshop_panel_head( 'search', '搜尋會員' ); ?>
+        <div class="twshop-panel-body">
+            <form method="get">
+                <input type="hidden" name="page" value="twshop-points">
+                <input type="hidden" name="tab" value="balances">
+                <?php twshop_render_customer_search_field( 'user_id', $user_id ); ?>
+                <button type="submit" class="button">查看</button>
+            </form>
+        </div>
+    </div>
+
+    <?php
+    if ( $user_id ) {
+        $user = get_userdata( $user_id );
+        if ( $user ) {
+            $points  = (int) get_user_meta( $user_id, 'twshop_reward_points', true );
+            $history = get_user_meta( $user_id, 'twshop_points_history', true );
+            if ( ! is_array( $history ) ) $history = array();
+            ?>
+            <div class="twshop-panel">
+                <?php twshop_panel_head(
+                    'coins',
+                    esc_html( $user->display_name ) . '（' . esc_html( $user->user_email ) . '）的' . esc_html( $term ),
+                    '',
+                    array(
+                        'url'   => admin_url( 'user-edit.php?user_id=' . $user_id . '#twshop-points-management' ),
+                        'label' => '前往手動調整',
+                    )
+                ); ?>
+                <div class="twshop-panel-body">
+                    <p style="font-size:22px; font-weight:bold; margin-bottom:4px;"><?php echo esc_html( number_format( $points ) ); ?> <?php echo esc_html( $term ); ?></p>
+                    <h4>最近異動（最新 <?php echo count( $history ); ?> 筆，只保留最新 100 筆）</h4>
+                    <table class="wp-list-table widefat fixed striped">
+                        <thead>
+                            <tr><th>時間</th><th>異動</th><th>原因</th><th>異動後餘額</th><th>到期日</th></tr>
+                        </thead>
+                        <tbody>
+                            <?php if ( empty( $history ) ) : ?>
+                                <tr><td colspan="5" style="text-align:center; color:#666;">目前尚無紀錄</td></tr>
+                            <?php else : foreach ( $history as $row ) :
+                                $amount = (int) ( $row['amount'] ?? 0 );
+                                ?>
+                                <tr>
+                                    <td><?php echo esc_html( $row['time'] ?? '' ); ?></td>
+                                    <td><?php echo esc_html( ( $amount > 0 ? '+' : '' ) . $amount ); ?></td>
+                                    <td><?php echo esc_html( $row['reason'] ?? '' ); ?></td>
+                                    <td><?php echo esc_html( number_format( (int) ( $row['balance'] ?? 0 ) ) ); ?></td>
+                                    <td><?php echo esc_html( $row['expire'] ?? '' ); ?></td>
+                                </tr>
+                            <?php endforeach; endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <?php
+        } else {
+            echo '<div class="notice notice-error"><p>找不到這位會員。</p></div>';
+        }
+    }
+    ?>
+
+    <div class="twshop-panel">
+        <?php twshop_panel_head( 'list', esc_html( $term ) . '總覽（依餘額排序，前 50 名）' ); ?>
+        <div class="twshop-panel-body">
+            <?php $overview = twshop_points_get_balances_overview( 50 ); ?>
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr><th>會員</th><th><?php echo esc_html( $term ); ?></th><th></th></tr>
+                </thead>
+                <tbody>
+                    <?php if ( empty( $overview ) ) : ?>
+                        <tr><td colspan="3" style="text-align:center; color:#666;">目前沒有任何會員持有<?php echo esc_html( $term ); ?></td></tr>
+                    <?php else : foreach ( $overview as $u ) :
+                        $bal = (int) get_user_meta( $u->ID, 'twshop_reward_points', true );
+                        ?>
+                        <tr>
+                            <td><?php echo esc_html( $u->display_name . '（' . $u->user_email . '）' ); ?></td>
+                            <td><?php echo esc_html( number_format( $bal ) ); ?></td>
+                            <td><a href="<?php echo esc_url( admin_url( 'admin.php?page=twshop-points&tab=balances&user_id=' . $u->ID ) ); ?>">查看</a></td>
+                        </tr>
+                    <?php endforeach; endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php
+}
+
+/**
  * 頁籤：點數規則設定。
  */
 function twshop_points_rules_tab() {

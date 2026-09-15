@@ -1,6 +1,11 @@
 <?php
 /**
- * 蝦皮串接後台頁面（4 個頁籤）＋ 所有 AJAX handler。
+ * 蝦皮串接：「系統設定 ▸ 蝦皮串接」頁籤（總開關 + 授權/商品對應/同步設定/同步紀錄
+ * 四個子頁籤）＋所有 AJAX handler。
+ *
+ * v25.8.65 起不再是獨立頂層選單、不再受「系統設定 ▸ 模組開關」影響——蝦皮串接需要
+ * 另外向蝦皮申請 partner key 才能真正運作，跟其餘一啟用就能用的功能模組性質不同，
+ * 改成頁籤自己的獨立開關（`wc_shopee_sync_enabled`），詳見 CLAUDE.md「蝦皮串接模組」。
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -9,27 +14,65 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 // 頁面外框
 // =========================================================================
 
-function twshop_shopee_render_page() {
-    twshop_render_admin_page( '蝦皮串接', function () {
-        $tabs = array(
-            'auth'    => '授權',
-            'mapping' => '商品對應',
-            'sync'    => '同步設定',
-            'log'     => '同步紀錄',
-        );
-        $current = twshop_get_current_admin_tab( $tabs );
-        twshop_render_admin_tabs( $tabs, $current, 'twshop-shopee' );
+/**
+ * 被 twshop_system_render_page()（pages.php）以 `tab=shopee` 呼叫，是「系統設定」頁的
+ * 其中一個頁籤內容，不再自帶 twshop_render_admin_page() 外框（外層已經包過一次）。
+ *
+ * 內部的四個子頁籤（授權/商品對應/同步設定/同步紀錄）用獨立的 `subtab` GET 參數導覽，
+ * 不能沿用共用的 twshop_render_admin_tabs()／twshop_get_current_admin_tab()——那兩支
+ * 寫死讀寫 `$_GET['tab']`，跟外層「系統設定」自己的 `tab=shopee` 會互相踩到。
+ *
+ * 總開關關閉時完全不顯示四個子頁籤（連同它們暗示的授權/同步功能一起隱藏），而不是
+ * 顯示出來但背後的 AJAX handler 因為開關關閉而沒有註冊——避免「已知踩坑：跨模組共用
+ * 的 AJAX action」那類「按鈕點了沒反應、沒有任何錯誤訊息」的情境從一開始就不會發生。
+ */
+function twshop_shopee_settings_tab() {
+    $enabled = twshop_shopee_sync_enabled();
+    ?>
+    <div class="twshop-panel">
+        <?php twshop_panel_head( 'plug', '蝦皮串接總開關' ); ?>
+        <div class="twshop-panel-body">
+            <form action="options.php" method="post">
+                <?php settings_fields( 'wc_shopee_enable_group' ); ?>
+                <label><input type="checkbox" name="wc_shopee_sync_enabled" value="yes" <?php checked( $enabled, 'yes' ); ?>> 啟用蝦皮串接</label>
+                <p class="description">開啟後才會出現「授權」「商品對應」「同步設定」「同步紀錄」頁籤，並開始背景排程（推送庫存/價格、匯入訂單）。需要先向蝦皮申請 Partner ID / Partner Key 才能實際使用，見下方「授權」頁籤說明。</p>
+                <?php submit_button( '儲存設定', 'primary', 'submit', false ); ?>
+            </form>
+        </div>
+    </div>
+    <?php
+    if ( ! $enabled ) {
+        echo '<div class="notice notice-info inline"><p>蝦皮串接目前未啟用，勾選上方「啟用蝦皮串接」並儲存後，才能設定授權與同步選項。</p></div>';
+        return;
+    }
 
-        if ( 'auth' === $current ) {
-            twshop_shopee_auth_tab();
-        } elseif ( 'mapping' === $current ) {
-            twshop_shopee_mapping_tab();
-        } elseif ( 'sync' === $current ) {
-            twshop_shopee_sync_tab();
-        } elseif ( 'log' === $current ) {
-            twshop_shopee_log_tab();
-        }
-    } );
+    $sub_tabs = array(
+        'auth'    => '授權',
+        'mapping' => '商品對應',
+        'sync'    => '同步設定',
+        'log'     => '同步紀錄',
+    );
+    $requested   = isset( $_GET['subtab'] ) ? sanitize_key( wp_unslash( $_GET['subtab'] ) ) : '';
+    $current_sub = ( $requested && isset( $sub_tabs[ $requested ] ) ) ? $requested : 'auth';
+    ?>
+    <h2 class="nav-tab-wrapper" style="margin-top:10px;">
+        <?php foreach ( $sub_tabs as $slug => $label ) :
+            $url   = admin_url( 'admin.php?page=twshop-system&tab=shopee&subtab=' . $slug );
+            $class = 'nav-tab' . ( $slug === $current_sub ? ' nav-tab-active' : '' );
+            ?>
+            <a href="<?php echo esc_url( $url ); ?>" class="<?php echo esc_attr( $class ); ?>"><?php echo esc_html( $label ); ?></a>
+        <?php endforeach; ?>
+    </h2>
+    <?php
+    if ( 'auth' === $current_sub ) {
+        twshop_shopee_auth_tab();
+    } elseif ( 'mapping' === $current_sub ) {
+        twshop_shopee_mapping_tab();
+    } elseif ( 'sync' === $current_sub ) {
+        twshop_shopee_sync_tab();
+    } elseif ( 'log' === $current_sub ) {
+        twshop_shopee_log_tab();
+    }
 }
 
 function twshop_shopee_render_not_configured_notice() {
@@ -122,7 +165,7 @@ function twshop_shopee_auth_tab() {
                 </tbody>
             </table>
             <p style="margin-top:12px;">
-                <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=twshop-shopee&tab=auth&twshop_shopee_manual_refresh=1' ), 'twshop_shopee_manual_refresh' ) ); ?>" class="button">手動續期 Token</a>
+                <a href="<?php echo esc_url( wp_nonce_url( twshop_shopee_admin_url( 'auth', array( 'twshop_shopee_manual_refresh' => 1 ) ), 'twshop_shopee_manual_refresh' ) ); ?>" class="button">手動續期 Token</a>
             </p>
         <?php endif; ?>
         </div>
@@ -181,10 +224,10 @@ function twshop_shopee_mapping_tab() {
                 <span id="twshop-shopee-mapping-status" style="margin-left:8px;"></span>
             </p>
             <p>
-                <a href="<?php echo esc_url( admin_url( 'admin.php?page=twshop-shopee&tab=mapping' ) ); ?>">全部</a> |
-                <a href="<?php echo esc_url( admin_url( 'admin.php?page=twshop-shopee&tab=mapping&status=linked' ) ); ?>">已綁定</a> |
-                <a href="<?php echo esc_url( admin_url( 'admin.php?page=twshop-shopee&tab=mapping&status=unlinked' ) ); ?>">未綁定</a> |
-                <a href="<?php echo esc_url( admin_url( 'admin.php?page=twshop-shopee&tab=mapping&status=conflict' ) ); ?>">衝突</a>
+                <a href="<?php echo esc_url( twshop_shopee_admin_url( 'mapping' ) ); ?>">全部</a> |
+                <a href="<?php echo esc_url( twshop_shopee_admin_url( 'mapping', array( 'status' => 'linked' ) ) ); ?>">已綁定</a> |
+                <a href="<?php echo esc_url( twshop_shopee_admin_url( 'mapping', array( 'status' => 'unlinked' ) ) ); ?>">未綁定</a> |
+                <a href="<?php echo esc_url( twshop_shopee_admin_url( 'mapping', array( 'status' => 'conflict' ) ) ); ?>">衝突</a>
             </p>
             <table class="widefat striped">
                 <thead>

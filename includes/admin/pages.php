@@ -45,15 +45,17 @@ function twshop_visual_coupons_render_page() {
 function twshop_points_render_page() {
     twshop_render_admin_page( '紅利點數', function () {
         $tabs = array(
-            'rules'  => '點數規則設定',
-            'texts'  => '點數提示文字',
-            'award'  => '發放與退還時機',
-            'redeem' => '點數兌換商品',
-            'import' => '匯入點數資料',
+            'balances' => '會員餘額',
+            'rules'    => '點數規則設定',
+            'texts'    => '點數提示文字',
+            'award'    => '發放與退還時機',
+            'redeem'   => '點數兌換商品',
+            'import'   => '匯入點數資料',
         );
         $current = twshop_get_current_admin_tab( $tabs );
         twshop_render_admin_tabs( $tabs, $current, 'twshop-points' );
-        if ( 'rules' === $current ) twshop_points_rules_tab();
+        if ( 'balances' === $current ) twshop_points_balances_tab();
+        elseif ( 'rules' === $current ) twshop_points_rules_tab();
         elseif ( 'texts' === $current ) twshop_points_texts_tab();
         elseif ( 'award' === $current ) twshop_points_award_tab();
         elseif ( 'redeem' === $current ) twshop_points_redeem_tab();
@@ -85,11 +87,16 @@ function twshop_system_render_page() {
             $tabs['modules'] = '模組開關';
         }
         $tabs['tabs'] = '頁籤管理';
+        // 蝦皮串接（v25.8.65 起從獨立頂層選單搬進來，見 page-shopee.php 檔頭說明）：
+        // 跟「一般」「頁籤管理」一樣不受模組開關限制、manage_woocommerce 即可看到，
+        // 只是內容本身多包一層自己的子頁籤（`subtab` 參數，見 twshop_shopee_settings_tab()）。
+        $tabs['shopee'] = '蝦皮串接';
         $current = twshop_get_current_admin_tab( $tabs );
         twshop_render_admin_tabs( $tabs, $current, 'twshop-system' );
         if ( 'general' === $current ) twshop_system_general_tab();
         elseif ( 'modules' === $current ) twshop_system_modules_tab();
         elseif ( 'tabs' === $current ) twshop_member_tabs_tab();
+        elseif ( 'shopee' === $current ) twshop_shopee_settings_tab();
     } );
 }
 
