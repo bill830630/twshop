@@ -106,9 +106,9 @@ function twshop_add_wallet_credit_product_fields() {
     woocommerce_wp_text_input( array(
         'id'                => '_twshop_wallet_credit_amount',
         'label'             => '儲值金額度（每件）',
-        'placeholder'       => '例如 1000',
+        'placeholder'       => '留空預設等於商品價格',
         'desc_tip'          => true,
-        'description'       => '購買 1 件這個商品，會員的儲值金餘額增加多少。若高於商品售價，差額會自動變成「加贈金」；等於售價則沒有加贈。',
+        'description'       => '購買 1 件這個商品，會員的儲值金餘額增加多少。留空時存檔會自動帶入商品價格（沒有加贈）；填一個高於商品價格的數字，差額就會自動變成「加贈金」——這個欄位跟上面「商品價格」是各自獨立設定的兩個值，商品價格決定顧客要付多少錢，這裡決定會員實際入帳多少。',
         'type'              => 'number',
         'custom_attributes' => array( 'step' => '1', 'min' => '0' ),
     ) );
@@ -118,11 +118,27 @@ function twshop_add_wallet_credit_product_fields() {
 /**
  * 掛 `woocommerce_process_product_meta_wallet_credit`（WooCommerce 依商品類型觸發的
  * 存檔 action，只有 product-type=wallet_credit 才會呼叫，不需要在函式裡再判斷一次類型）。
+ *
+ * 「儲值金額度」留空（或填 0）時預設帶入商品價格（`_regular_price`，跟這支函式同一次
+ * $_POST 送出，WooCommerce 核心的售價欄位一律無條件存在於商品編輯表單裡，見
+ * wallet-credit-product.js 開頭關於欄位重用的說明）——多數儲值金商品是「儲多少送多少」
+ * 的單純情境（無加贈），這個預設值讓管理員不用每次都手動填一次一模一樣的數字，也避免
+ * 忘記填導致這個欄位留空/是 0（真的存成 0 的話，付款完成入帳邏輯的 `$credit_total <= 0`
+ * 判斷會讓這個商品完全不入帳，顧客等於白付錢）。要做「加贈」的商品，管理員只要明確填一個
+ * 高於商品價格的數字即可，不受這個預設值影響——只有「完全沒填/或填 0」才會套用預設。
  */
 function twshop_save_wallet_credit_product_fields( $post_id ) {
-    $credit_amount = isset( $_POST['_twshop_wallet_credit_amount'] )
+    $posted_amount = isset( $_POST['_twshop_wallet_credit_amount'] )
         ? round( (float) wp_unslash( $_POST['_twshop_wallet_credit_amount'] ), 2 )
         : 0.0;
+
+    if ( $posted_amount > 0 ) {
+        $credit_amount = $posted_amount;
+    } else {
+        $credit_amount = isset( $_POST['_regular_price'] )
+            ? round( (float) wp_unslash( $_POST['_regular_price'] ), 2 )
+            : 0.0;
+    }
     update_post_meta( $post_id, '_twshop_wallet_credit_amount', $credit_amount );
 
     // 儲值金商品不需要出貨，強制勾選「虛擬商品」——這個商品類型本來就不顯示「虛擬商品」
