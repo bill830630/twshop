@@ -179,6 +179,31 @@ function twshop_wallet_credit_on_payment_complete( $order_id ) {
     if ( ! $order->has_status( 'completed' ) ) {
         $order->update_status( 'completed', '儲值訂單付款完成，無實體商品不需出貨，自動轉為已完成。' );
     }
+
+    twshop_wallet_maybe_send_topup_email( $order, $user_id, $paid, $bonus );
+}
+
+/**
+ * 儲值成功通知信，開關與範本見「儲值金 ▸ 設定」頁籤。跟會員等級的生日禮/升等禮通知信
+ * 同一套做法（`str_replace` 套版＋直接同步 `wp_mail()`，不像點數到期提醒那樣走
+ * `wp_schedule_single_event()` 排隊——這裡是使用者當下操作觸發的即時通知，不是批次
+ * 掃描大量會員的排程情境，不需要非同步化）。
+ */
+function twshop_wallet_maybe_send_topup_email( $order, $user_id, $paid, $bonus ) {
+    if ( 'yes' !== twshop_option( 'wc_wallet_topup_email_enabled' ) ) return;
+
+    $user = get_userdata( $user_id );
+    if ( ! $user || ! is_email( $user->user_email ) ) return;
+
+    $balance = twshop_wallet_get_balance( $user_id );
+    $body    = get_option( 'wc_wallet_topup_email_body', "親愛的 {name}：\n\n您的儲值已完成！\n\n本次儲值：NT{amount}\n加贈金額：NT{bonus}\n目前餘額：NT{balance}\n\n感謝您的支持！" );
+    $body    = str_replace(
+        array( '{name}', '{amount}', '{bonus}', '{balance}', '{order_id}' ),
+        array( $user->display_name, number_format( $paid, 2 ), number_format( $bonus, 2 ), number_format( $balance['total'], 2 ), $order->get_id() ),
+        $body
+    );
+
+    wp_mail( $user->user_email, twshop_option( 'wc_wallet_topup_email_subject' ), $body );
 }
 
 /**

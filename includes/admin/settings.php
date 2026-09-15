@@ -187,6 +187,9 @@ function twshop_register_settings() {
 
     // 儲值金 ▸ 設定
     register_setting( 'wc_wallet_settings_group', 'wc_wallet_tier_spend_full_amount', 'twshop_sanitize_yes_no' );
+    register_setting( 'wc_wallet_settings_group', 'wc_wallet_topup_email_enabled', 'twshop_sanitize_yes_no' );
+    register_setting( 'wc_wallet_settings_group', 'wc_wallet_topup_email_subject', 'sanitize_text_field' );
+    register_setting( 'wc_wallet_settings_group', 'wc_wallet_topup_email_body', 'sanitize_textarea_field' );
 
     // 會員 ▸ 頁籤管理
     register_setting( 'wc_member_tabs_group', 'wc_membership_tab_name', 'sanitize_text_field' );

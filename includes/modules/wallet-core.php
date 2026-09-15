@@ -243,8 +243,8 @@ function twshop_wallet_get_ledger( $user_id, $limit = 50, $offset = 0 ) {
     ), ARRAY_A );
 }
 
-function twshop_wallet_type_label( $type ) {
-    $labels = array(
+function twshop_wallet_get_type_labels() {
+    return array(
         'topup'        => '線上儲值（本金）',
         'topup_bonus'  => '線上儲值（加贈）',
         'spend'        => '購物折抵',
@@ -252,6 +252,10 @@ function twshop_wallet_type_label( $type ) {
         'topup_revoke' => '儲值訂單退款扣回',
         'adjust'       => '後台手動調整',
     );
+}
+
+function twshop_wallet_type_label( $type ) {
+    $labels = twshop_wallet_get_type_labels();
     return $labels[ $type ] ?? $type;
 }
 
@@ -259,4 +263,70 @@ function twshop_wallet_signed_amount( $amount ) {
     $amount = (float) $amount;
     if ( 0.0 === $amount ) return '—';
     return ( $amount > 0 ? '+' : '' ) . number_format( $amount, 2 );
+}
+
+/**
+ * 後台「儲值金 ▸ 會員餘額」頁的總覽清單：目前有餘額（本金或加贈金任一 > 0）的會員，
+ * 依總餘額由高到低排序。純讀取、不分頁（`$limit` 已經足夠涵蓋一般站台的「有餘額會員」
+ * 規模，真的需要逐頁瀏覽全部會員時應該用下方 twshop_wallet_query_ledger() 依會員篩選
+ * 交易紀錄，而不是在這裡加分頁）。
+ */
+function twshop_wallet_get_balances_overview( $limit = 50 ) {
+    global $wpdb;
+    return $wpdb->get_results( $wpdb->prepare(
+        "SELECT * FROM " . twshop_wallet_balances_table() . "
+         WHERE balance_paid > 0 OR balance_bonus > 0
+         ORDER BY (balance_paid + balance_bonus) DESC
+         LIMIT %d",
+        (int) $limit
+    ), ARRAY_A );
+}
+
+/**
+ * 後台「儲值金 ▸ 交易紀錄」頁用：跨會員、可依會員/類型/日期區間篩選的分頁查詢。
+ * 跟 twshop_wallet_get_ledger()（單一會員、無篩選，會員中心與個人資料頁用）是兩支
+ * 不同用途的函式，不合併——那支的呼叫端不需要篩選條件，多這些參數反而增加誤用風險。
+ *
+ * @return array{rows: array, total: int}
+ */
+function twshop_wallet_query_ledger( $args = array() ) {
+    global $wpdb;
+    $args = wp_parse_args( $args, array(
+        'user_id'   => 0,
+        'type'      => '',
+        'date_from' => '',
+        'date_to'   => '',
+        'limit'     => 50,
+        'offset'    => 0,
+    ) );
+
+    $where        = array( '1=1' );
+    $where_params = array();
+    if ( $args['user_id'] ) {
+        $where[]        = 'user_id = %d';
+        $where_params[] = (int) $args['user_id'];
+    }
+    if ( $args['type'] ) {
+        $where[]        = 'type = %s';
+        $where_params[] = $args['type'];
+    }
+    if ( $args['date_from'] ) {
+        $where[]        = 'created_at >= %s';
+        $where_params[] = $args['date_from'] . ' 00:00:00';
+    }
+    if ( $args['date_to'] ) {
+        $where[]        = 'created_at <= %s';
+        $where_params[] = $args['date_to'] . ' 23:59:59';
+    }
+    $where_sql = implode( ' AND ', $where );
+    $table     = twshop_wallet_ledger_table();
+
+    $count_sql = "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}";
+    $total     = (int) ( $where_params ? $wpdb->get_var( $wpdb->prepare( $count_sql, $where_params ) ) : $wpdb->get_var( $count_sql ) );
+
+    $list_sql    = "SELECT * FROM {$table} WHERE {$where_sql} ORDER BY id DESC LIMIT %d OFFSET %d";
+    $list_params = array_merge( $where_params, array( (int) $args['limit'], (int) $args['offset'] ) );
+    $rows        = $wpdb->get_results( $wpdb->prepare( $list_sql, $list_params ), ARRAY_A );
+
+    return array( 'rows' => $rows, 'total' => $total );
 }

@@ -278,6 +278,8 @@ function twshop_get_option_defaults() {
         'wc_classic_cart_show_wallet'   => 'yes',
         'wc_wallet_allow_custom_amount' => 'no',
         'wc_wallet_tier_spend_full_amount' => 'yes',
+        'wc_wallet_topup_email_enabled' => 'yes',
+        'wc_wallet_topup_email_subject' => '儲值成功通知',
     );
     return $defaults;
 }
