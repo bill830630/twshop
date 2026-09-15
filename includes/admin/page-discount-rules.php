@@ -31,9 +31,10 @@ function twshop_marketing_rules_tab() {
             <?php foreach ( $rules as $rule ) echo twshop_get_rule_row_html( $rule, $tiers, $product_cats, $product_tags ); ?>
         </div>
 
-        <div id="discount-rule-template" style="display:none;">
-            <?php echo twshop_get_rule_row_html(array(), $tiers, $product_cats, $product_tags); ?>
-        </div>
+        <?php // 必須是 <template>，不能是隱藏的 <div>：隱藏 div 仍是真的 DOM，頁面載入時 WooCommerce 的
+        // wc-enhanced-select.js 會先對範本裡的下拉選單套 selectWoo（加 enhanced class＋插入 .select2-container），
+        // 「新增規則表單」複製 innerHTML 時連這些一起複製，新卡片的選單被當成已初始化而跳過，點了沒反應。 ?>
+        <template id="discount-rule-template"><?php echo twshop_get_rule_row_html(array(), $tiers, $product_cats, $product_tags); ?></template>
         <template id="twshop-tier-row-template"><?php echo twshop_get_rule_tier_row_html(); ?></template>
 
         <p><button type="button" class="button" id="add-rule-row">新增規則表單</button></p>
