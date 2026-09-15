@@ -200,6 +200,9 @@ function twshop_membership_init() {
         add_filter( 'woocommerce_variation_prices_price', 'twshop_apply_product_discount_rules', 99, 2 );
         add_filter( 'woocommerce_get_variation_prices_hash', 'twshop_add_discount_context_to_variation_price_hash', 10, 1 );
         add_filter( 'woocommerce_product_is_on_sale', 'twshop_product_is_on_sale', 99, 2 );
+        // 傳統購物車頁「價格」欄原生只顯示單一數字，特價時看不出原價/折扣，見
+        // twshop_cart_item_price_with_strike() 的說明。
+        add_filter( 'woocommerce_cart_item_price', 'twshop_cart_item_price_with_strike', 10, 3 );
         add_action( 'woocommerce_cart_calculate_fees', 'twshop_apply_cart_discount_rules', 20, 1 );
         add_filter( 'woocommerce_package_rates', 'twshop_apply_free_shipping_rules', 100, 2 );
         add_filter( 'woocommerce_cart_shipping_packages', 'twshop_add_rules_context_to_shipping_packages' );

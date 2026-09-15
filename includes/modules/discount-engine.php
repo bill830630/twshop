@@ -552,6 +552,30 @@ function twshop_product_is_on_sale( $is_on_sale, $product ) {
 }
 
 /**
+ * 傳統購物車頁「價格」欄（`templates/cart/cart.php`）的「價格」欄。
+ *
+ * WooCommerce 核心這一欄一律只印一個數字（`WC_Cart::get_product_price()` 直接
+ * `wc_price( wc_get_price_to_display( $product ) )`），**不會**像商品頁 `get_price_html()`
+ * 那樣在特價時顯示「原價劃掉＋特價」——這是核心一路以來的既有行為，不是本外掛造成的，
+ * 連原生 WooCommerce 特價（`_sale_price`）在傳統購物車頁一樣只看得到單一價格。顧客在購物車頁
+ * 完全看不出這件商品其實有打折，只會覺得小計數字對不上商品頁看到的價格，可能誤以為算錯。
+ *
+ * 只在商品「目前是特價中」（`is_on_sale()`，`twshop_product_is_on_sale()` 已把本外掛折扣規則
+ * 與原生特價一併納入判斷，非本外掛造成的特價一樣受惠）才改成「原價劃掉＋特價」格式，套用
+ * WooCommerce 商品頁同一套 `wc_format_sale_price()` 組字串；不是特價的商品維持原生單一價格
+ * 顯示，不影響任何既有版面。
+ */
+function twshop_cart_item_price_with_strike( $price_html, $cart_item, $cart_item_key ) {
+    $product = $cart_item['data'] ?? null;
+    if ( ! $product instanceof WC_Product || ! $product->is_on_sale() ) return $price_html;
+
+    return wc_format_sale_price(
+        wc_get_price_to_display( $product, array( 'price' => $product->get_regular_price() ) ),
+        wc_get_price_to_display( $product )
+    ) . $product->get_price_suffix();
+}
+
+/**
  * 可變商品的折扣徽章百分比：逐一讀取「可見」規格（get_visible_children，跟 WC 內建
  * get_variation_prices() 篩選範圍一致，排除下架/未發布/庫存狀態不允許購買的規格——
  * 顧客本來就買不到的規格沒必要拿來算折扣，也可能造成庫存售完但仍在商店頁閃現折扣角標的怪異情況）
