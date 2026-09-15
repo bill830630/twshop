@@ -175,6 +175,7 @@ function twshop_register_settings() {
     register_setting( 'wc_system_general_group', 'wc_classic_cart_show_addons', 'twshop_sanitize_yes_no' );
     register_setting( 'wc_system_general_group', 'wc_classic_cart_show_progress', 'twshop_sanitize_yes_no' );
     register_setting( 'wc_system_general_group', 'wc_classic_cart_show_points', 'twshop_sanitize_yes_no' );
+    register_setting( 'wc_system_general_group', 'wc_classic_cart_show_wallet', 'twshop_sanitize_yes_no' );
     register_setting( 'wc_system_general_group', 'wc_shipping_method_titles', 'twshop_sanitize_method_titles' );
     register_setting( 'wc_system_general_group', 'wc_payment_method_titles', 'twshop_sanitize_method_titles' );
 

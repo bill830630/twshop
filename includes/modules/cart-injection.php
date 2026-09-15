@@ -162,12 +162,20 @@ function twshop_ajax_refresh_components() {
         $redeem_products_html = ob_get_clean();
     }
 
+    $wallet_html = '';
+    if ( twshop_module_enabled( 'wallet' ) ) {
+        ob_start();
+        twshop_render_wallet_redemption_ui();
+        $wallet_html = ob_get_clean();
+    }
+
     wp_send_json_success( array(
         'coupons_html'         => $coupons_html,
         'addons_html'          => $addons_html,
         'progress_html'        => $progress_html,
         'points_html'          => $points_html,
         'redeem_products_html' => $redeem_products_html,
+        'wallet_html'          => $wallet_html,
     ) );
 }
 

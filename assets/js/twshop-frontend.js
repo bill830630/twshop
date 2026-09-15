@@ -43,7 +43,7 @@
 
     function refresh_twshop_components() {
         var loc              = $('form.checkout').length ? 'checkout' : 'cart';
-        var hasWrappers      = $('.twshop-visual-coupons-wrapper, .twshop-cart-addons-wrapper, .twshop-cart-progress-wrapper, .twshop-points-redemption-wrapper, .twshop-points-redeem-products-wrapper').length > 0;
+        var hasWrappers      = $('.twshop-visual-coupons-wrapper, .twshop-cart-addons-wrapper, .twshop-cart-progress-wrapper, .twshop-points-redemption-wrapper, .twshop-points-redeem-products-wrapper, .twshop-wallet-redemption-wrapper').length > 0;
         var isBlocksCart     = $('.wp-block-woocommerce-cart, .wp-block-woocommerce-checkout').length > 0;
 
         // 若頁面上既無短代碼容器也非 Blocks 購物車，則跳過
@@ -80,15 +80,22 @@
                 $redeemProductsWrapper.replaceWith(res.data.redeem_products_html);
             }
 
-            // Blocks 購物車：兩個區塊都沒有既有的 classic wrapper 可以替換（block 版型
+            // 儲值金折抵區塊（v25.8.62 新增），跟點數折抵同一套替換邏輯。
+            var $walletWrapper = $('.twshop-wallet-redemption-wrapper');
+            if (res.data.wallet_html !== undefined && $walletWrapper.length) {
+                $walletWrapper.replaceWith(res.data.wallet_html);
+            }
+
+            // Blocks 購物車：這幾個區塊都沒有既有的 classic wrapper 可以替換（block 版型
             // 不會觸發 woocommerce_after_cart_table／woocommerce_before_cart_totals 這些
             // classic 模板 hooks），退而求其次一起注入到訂單摘要總計區塊最前面——沒有
             // 「商品列表下方」這個位置可以掛，維持改動前既有的 Blocks 購物車行為。
-            if (!$pointsWrapper.length && !$redeemProductsWrapper.length) {
+            if (!$pointsWrapper.length && !$redeemProductsWrapper.length && !$walletWrapper.length) {
                 var $totals = $('.wp-block-woocommerce-cart-order-summary-totals-block');
                 if ($totals.length) {
                     if (res.data.points_html !== undefined) $totals.prepend(res.data.points_html);
                     if (res.data.redeem_products_html !== undefined) $totals.prepend(res.data.redeem_products_html);
+                    if (res.data.wallet_html !== undefined) $totals.prepend(res.data.wallet_html);
                 }
             }
 
@@ -356,6 +363,30 @@
             }
             if (res && res.data && res.data.actual_points !== undefined) {
                 $('#twshop_points_input').val(res.data.actual_points);
+            }
+            location.reload();
+        });
+    });
+
+    // Wallet（儲值金）Redemption Interactivity
+    $(document.body).on('click', '#twshop_apply_wallet_btn', function (e) {
+        e.preventDefault();
+        var $btn = $(this);
+        var originalText = $btn.text();
+        var amount = $('#twshop_wallet_input').val();
+        $btn.text('處理中...').prop('disabled', true);
+        $.post(twshopData.ajaxUrl, {
+            action:        'twshop_apply_wallet',
+            amount:        amount,
+            twshop_nonce:  twshopData.nonce
+        }, function (res) {
+            if (res && res.success === false) {
+                alert((res.data && res.data.message) || '套用失敗，請重新輸入。');
+                $btn.text(originalText).prop('disabled', false);
+                return;
+            }
+            if (res && res.data && res.data.actual_amount !== undefined) {
+                $('#twshop_wallet_input').val(res.data.actual_amount);
             }
             location.reload();
         });

@@ -160,6 +160,7 @@ function twshop_membership_init() {
     add_action( 'woocommerce_after_cart_table',    'twshop_classic_cart_addons' );
     add_action( 'woocommerce_after_cart_table',    'twshop_classic_cart_redeem_products' );
     add_action( 'woocommerce_before_cart_totals',  'twshop_classic_cart_points',  10 );
+    add_action( 'woocommerce_before_cart_totals',  'twshop_classic_cart_wallet',  15 );
     add_action( 'woocommerce_before_cart_totals',  'twshop_classic_cart_coupons', 20 );
 
     // mini cart 優惠券「還差 $X」摘要（v25.5.94）：跟上面幾個一樣不受模組開關影響、統一在這裡
@@ -269,15 +270,37 @@ function twshop_membership_init() {
         add_action( 'twshop_send_points_expiry_notice', 'twshop_send_points_expiry_notice_email', 10, 3 );
     }
 
-    // ── 儲值金（v25.8.61 新增。目前只有第一階段：核心帳本、後台使用者個人資料頁
-    //    手動加扣、會員中心「我的儲值金」頁籤。購物車折抵／線上儲值／退款自動退回等
-    //    第二、三階段完成後會再擴充這個區塊，見 CLAUDE.md「儲值金模組」一節）────
+    // ── 儲值金（v25.8.61 新增第一階段：核心帳本；v25.8.62 新增第二階段：購物車折抵、
+    //    結帳扣款、取消/退款自動退回、訂單 metabox。線上儲值（第三階段）尚未實作，
+    //    見 CLAUDE.md「儲值金模組」一節）─────────────────────────────────────
     if ( twshop_module_enabled( 'wallet' ) ) {
         add_action( 'profile_personal_options', 'twshop_wallet_user_profile_management_ui' );
         add_action( 'edit_user_profile', 'twshop_wallet_user_profile_management_ui' );
         add_action( 'personal_options_update', 'twshop_wallet_save_user_profile_management' );
         add_action( 'edit_user_profile_update', 'twshop_wallet_save_user_profile_management' );
         add_action( 'woocommerce_account_my-wallet_endpoint', 'twshop_my_wallet_endpoint_content' );
+
+        // 購物車折抵（twshop_classic_cart_wallet() 本身在上面「不受模組開關影響」的
+        // 區塊已註冊，內部自行判斷模組狀態，這裡不重複註冊）
+        add_action( 'wp_ajax_twshop_apply_wallet', 'twshop_ajax_apply_wallet' );
+        add_action( 'woocommerce_cart_calculate_fees', 'twshop_apply_wallet_discount_fee', 30, 1 );
+        add_action( 'woocommerce_checkout_create_order', 'twshop_store_wallet_applied_on_order', 10, 1 );
+        add_action( 'woocommerce_after_checkout_validation', 'twshop_validate_wallet_balance', 10, 2 );
+        add_action( 'woocommerce_checkout_order_processed', 'twshop_deduct_wallet_on_checkout', 15, 3 );
+        add_action( 'woocommerce_cart_emptied', 'twshop_clear_applied_wallet_on_cart_emptied' );
+
+        // 取消/已退款/付款失敗：全額退回尚未退回的部分。刻意寫死這三個狀態，不像點數
+        // 模組那樣走可設定的 wc_points_revoke_statuses——儲值金第一版還沒有自己的
+        // 「發放與退還時機」設定頁，之後若要開放自訂再比照點數模組的既有寫法改成迴圈。
+        foreach ( array( 'cancelled', 'refunded', 'failed' ) as $twshop_wallet_revoke_status ) {
+            add_action( 'woocommerce_order_status_' . $twshop_wallet_revoke_status, 'twshop_refund_wallet_on_order_cancel', 15, 1 );
+        }
+        add_action( 'woocommerce_order_refunded', 'twshop_handle_order_refund_wallet', 15, 2 );
+
+        // 訂單編輯頁 metabox（HPOS／legacy 兩種畫面，比照 twshop_register_order_logistics_metabox() 的既有寫法）
+        add_action( 'add_meta_boxes_shop_order', 'twshop_register_order_wallet_metabox' );
+        add_action( 'add_meta_boxes_woocommerce_page_wc-orders', 'twshop_register_order_wallet_metabox' );
+        add_action( 'wp_ajax_twshop_wallet_manual_return', 'twshop_ajax_wallet_manual_return' );
     }
 
     // ── 結帳與訂單管理強化（台灣地址、超商取貨、訂單物流資訊、訂單管理後台強化，

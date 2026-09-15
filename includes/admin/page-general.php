@@ -177,6 +177,15 @@ function twshop_system_general_tab() {
                                 </label>
                             </td>
                         </tr>
+                        <tr>
+                            <th scope="row">儲值金折抵區塊</th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" name="wc_classic_cart_show_wallet" value="yes" <?php checked( twshop_option( 'wc_classic_cart_show_wallet' ), 'yes' ); ?> />
+                                    在購物車頁面自動顯示儲值金折抵區塊
+                                </label>
+                            </td>
+                        </tr>
                     </table>
                 </div>
             </div>

@@ -275,6 +275,7 @@ function twshop_get_option_defaults() {
         'wc_classic_cart_show_coupons'  => 'yes',
         'wc_classic_cart_show_points'   => 'yes',
         'wc_classic_cart_show_progress' => 'yes',
+        'wc_classic_cart_show_wallet'   => 'yes',
     );
     return $defaults;
 }
