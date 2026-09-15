@@ -373,14 +373,18 @@ function twshop_save_birthday_field_frontend( $user_id ) {
     }
 }
 
-function twshop_user_profile_management_ui( $user ) {
+/**
+ * 使用者編輯頁的會員生日管理。v25.8.66 前這裡跟「手動增減點數」共用同一個區塊
+ * （函式當時叫 `twshop_user_profile_management_ui()`），手動調整點數已搬到後台
+ * 「紅利點數 ▸ 會員餘額」頁籤（`twshop_points_balances_tab()`，`page-points.php`），
+ * 管理員找會員點數餘額跟調整點數現在是同一個地方，這裡只剩生日——生日是身分資料、
+ * 不是點數本身，維持在使用者編輯頁比較合理，沒有跟著搬。
+ */
+function twshop_birthday_management_ui( $user ) {
     if ( ! current_user_can( 'manage_woocommerce' ) ) return;
-    $points = (int) get_user_meta( $user->ID, 'twshop_reward_points', true );
-    $history = get_user_meta( $user->ID, 'twshop_points_history', true );
-    if ( ! is_array($history) ) $history = array();
     ?>
-    <div id="twshop-points-management">
-    <h3>會員生日與點數管理</h3>
+    <div id="twshop-birthday-management">
+    <h3>會員生日管理</h3>
     <table class="form-table">
         <tr>
             <th><label>會員生日（月/日）</label></th>
@@ -393,69 +397,13 @@ function twshop_user_profile_management_ui( $user ) {
                 <p class="description">會員前台一旦設定生日即無法自行修改；管理員可在此直接修改或補登，「月」「日」皆留空白並儲存即可清空生日（清空後會員可重新自行填寫）。</p>
             </td>
         </tr>
-        <tr>
-            <th><label>手動增減點數</label></th>
-            <td>
-                <input type="number" name="twshop_manual_points" value="" class="regular-text" placeholder="例如: 10 或 -5" style="width:120px;">
-                備註原因：<input type="text" name="twshop_points_reason" value="" class="regular-text" placeholder="手動調整">
-                <?php $manual_points_expiry_days = (int) get_option( 'wc_points_expiry_days', 0 ); ?>
-                <?php if ( $manual_points_expiry_days > 0 ) : ?>
-                    <br><br>
-                    自訂有效天數：<input type="number" name="twshop_manual_points_expire_days" min="1" class="small-text" placeholder="<?php echo esc_attr( $manual_points_expiry_days ); ?>"> 天
-                    <span class="description">僅適用於本次輸入正數（增加）的點數，自入帳日起算；留空則依系統預設（<?php echo esc_html( $manual_points_expiry_days ); ?> 天）</span>
-                <?php endif; ?>
-                <button type="submit" class="button button-primary" style="margin-left:8px;">儲存點數</button>
-                <p class="description">輸入正數為增加，輸入負數為扣除。</p>
-            </td>
-        </tr>
-        <tr>
-            <th><label>目前可用點數</label></th>
-            <td>
-                <span style="font-size:20px; font-weight:bold; color:#d63384;"><?php echo esc_html($points); ?></span> 點
-                <?php $nearest_expiring = twshop_get_nearest_expiring_batch( $user->ID ); ?>
-                <?php if ( $nearest_expiring ) : ?>
-                    <span style="margin-left:10px; color:#b32d2e;">有 <?php echo esc_html( $nearest_expiring['amount'] ); ?> 點將於 <?php echo esc_html( $nearest_expiring['expire'] ); ?> 到期</span>
-                <?php endif; ?>
-            </td>
-        </tr>
-        <tr>
-            <th><label>最新異動紀錄</label></th>
-            <td>
-                <div style="max-height:200px; overflow-y:auto; border:1px solid #ccc; padding:10px; background:#f9f9f9;">
-                    <?php if(empty($history)): ?>
-                        <p style="margin:0; color:#666;">目前尚無紀錄</p>
-                    <?php else: ?>
-                        <table style="width:100%; text-align:left; border-collapse: collapse;">
-                            <thead>
-                                <tr style="border-bottom:1px solid #ddd;">
-                                    <th style="padding:5px;">時間</th>
-                                    <th style="padding:5px;">異動</th>
-                                    <th style="padding:5px;">原因</th>
-                                    <th style="padding:5px;">餘額</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach($history as $log): ?>
-                                    <tr>
-                                        <td style="padding:5px; font-size:12px;"><?php echo esc_html($log['time']); ?></td>
-                                        <td style="padding:5px; color:<?php echo $log['amount']>0 ? 'green' : 'red'; ?>; font-weight:bold;"><?php echo ($log['amount']>0?'+':'').esc_html($log['amount']); ?></td>
-                                        <td style="padding:5px; font-size:12px;"><?php echo esc_html($log['reason']); ?></td>
-                                        <td style="padding:5px; font-weight:bold;"><?php echo esc_html($log['balance']); ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    <?php endif; ?>
-                </div>
-            </td>
-        </tr>
     </table>
     </div>
     <?php
 }
 
 /**
- * 使用者編輯頁（profile.php / user-edit.php）：把點數管理區塊搬到個人資料表單最上方。
+ * 使用者編輯頁（profile.php / user-edit.php）：把生日管理區塊搬到個人資料表單最上方。
  *
  * 原本掛在 `admin_footer-user-edit.php` / `admin_footer-profile.php` 直接印出 <script>。
  * 改成載入獨立檔案之後**不能再掛那兩個 hook**——wp-admin/admin-footer.php 的順序是
@@ -463,12 +411,12 @@ function twshop_user_profile_management_ui( $user ) {
  * 腳本永遠不會被印出來，而且不會有任何錯誤訊息，只是區塊不再被搬到最上面。
  * 因此改掛 `admin_enqueue_scripts`（頁面開始輸出之前就跑完）。
  */
-function twshop_enqueue_points_to_top_script( $hook ) {
+function twshop_enqueue_birthday_to_top_script( $hook ) {
     if ( ! in_array( $hook, array( 'profile.php', 'user-edit.php' ), true ) ) return;
-    twshop_enqueue_asset_script( 'admin/points-to-top', array(), array() );
+    twshop_enqueue_asset_script( 'admin/birthday-to-top', array(), array() );
 }
 
-function twshop_save_user_profile_management( $user_id ) {
+function twshop_save_birthday_management( $user_id ) {
     if ( ! current_user_can( 'manage_woocommerce' ) ) return false;
 
     if ( isset( $_POST['twshop_birthday_month'], $_POST['twshop_birthday_day'] ) ) {
@@ -480,22 +428,31 @@ function twshop_save_user_profile_management( $user_id ) {
             delete_user_meta( $user_id, 'twshop_birthday' );
         }
     }
+}
 
-    if ( ! empty( $_POST['twshop_manual_points'] ) ) {
-        $amount = (int) $_POST['twshop_manual_points'];
-        $reason = sanitize_text_field( wp_unslash( $_POST['twshop_points_reason'] ?? '' ) );
-        if ( empty($reason) ) $reason = '管理員手動調整';
+/**
+ * 手動增減點數，唯一寫入入口。原本是使用者編輯頁表單的一部分
+ * （`twshop_save_user_profile_management()` 的一段），v25.8.66 搬到後台「紅利點數 ▸
+ * 會員餘額」頁籤自己的 `<form>`（`twshop_points_balances_tab()`，`page-points.php`），
+ * 這支保留在 points-engine.php 純粹是因為 `twshop_add_points_log()`／點數到期批次計算
+ * 邏輯本來就在這個檔案，UI 呼叫端搬去哪裡不影響這支函式的位置。
+ *
+ * @return true 有實際套用一筆異動；false 金額為 0、沒有動作。
+ */
+function twshop_apply_manual_points_adjustment( $user_id, $amount, $reason = '', $custom_expire_days = 0 ) {
+    $amount = (int) $amount;
+    if ( 0 === $amount ) return false;
 
-        $custom_expire = null;
-        if ( $amount > 0 && ! empty( $_POST['twshop_manual_points_expire_days'] ) ) {
-            $custom_days = absint( $_POST['twshop_manual_points_expire_days'] );
-            if ( $custom_days > 0 ) {
-                $custom_expire = date( 'Y-m-d', strtotime( wp_date( 'Y-m-d' ) . " +{$custom_days} days" ) );
-            }
-        }
+    $reason = sanitize_text_field( $reason );
+    if ( '' === $reason ) $reason = '管理員手動調整';
 
-        twshop_add_points_log( $user_id, $amount, $reason, $custom_expire );
+    $custom_expire = null;
+    if ( $amount > 0 && $custom_expire_days > 0 ) {
+        $custom_expire = date( 'Y-m-d', strtotime( wp_date( 'Y-m-d' ) . " +{$custom_expire_days} days" ) );
     }
+
+    twshop_add_points_log( $user_id, $amount, $reason, $custom_expire );
+    return true;
 }
 
 /**

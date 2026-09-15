@@ -178,11 +178,11 @@ function twshop_membership_init() {
         add_action( 'woocommerce_created_customer', 'twshop_save_birthday_field_registration' );
         add_action( 'woocommerce_edit_account_form', 'twshop_add_birthday_field_frontend' );
         add_action( 'woocommerce_save_account_details', 'twshop_save_birthday_field_frontend' );
-        add_action( 'profile_personal_options', 'twshop_user_profile_management_ui' );
-        add_action( 'edit_user_profile', 'twshop_user_profile_management_ui' );
-        add_action( 'personal_options_update', 'twshop_save_user_profile_management' );
-        add_action( 'edit_user_profile_update', 'twshop_save_user_profile_management' );
-        add_action( 'admin_enqueue_scripts', 'twshop_enqueue_points_to_top_script' );
+        add_action( 'profile_personal_options', 'twshop_birthday_management_ui' );
+        add_action( 'edit_user_profile', 'twshop_birthday_management_ui' );
+        add_action( 'personal_options_update', 'twshop_save_birthday_management' );
+        add_action( 'edit_user_profile_update', 'twshop_save_birthday_management' );
+        add_action( 'admin_enqueue_scripts', 'twshop_enqueue_birthday_to_top_script' );
     }
 
     // ── 視覺化優惠券 ──────────────────────────────────────────────────────
@@ -271,13 +271,10 @@ function twshop_membership_init() {
     }
 
     // ── 儲值金（v25.8.61 第一階段：核心帳本；v25.8.62 第二階段：購物車折抵、結帳扣款、
-    //    取消/退款自動退回、訂單 metabox；v25.8.63 第三階段：線上自助儲值。第四階段
-    //    （後台列表頁、Email 通知）尚未實作，見 CLAUDE.md「儲值金模組」一節）───────
+    //    取消/退款自動退回、訂單 metabox；v25.8.63 第三階段：線上自助儲值；v25.8.64
+    //    第四階段：後台列表頁、Email 通知。v25.8.66 起手動加扣搬到「儲值金 ▸ 會員餘額」
+    //    頁籤，不再掛使用者個人資料頁 hook，見 CLAUDE.md「儲值金模組」一節）───────
     if ( twshop_module_enabled( 'wallet' ) ) {
-        add_action( 'profile_personal_options', 'twshop_wallet_user_profile_management_ui' );
-        add_action( 'edit_user_profile', 'twshop_wallet_user_profile_management_ui' );
-        add_action( 'personal_options_update', 'twshop_wallet_save_user_profile_management' );
-        add_action( 'edit_user_profile_update', 'twshop_wallet_save_user_profile_management' );
         add_action( 'woocommerce_account_my-wallet_endpoint', 'twshop_my_wallet_endpoint_content' );
 
         // 購物車折抵（twshop_classic_cart_wallet() 本身在上面「不受模組開關影響」的

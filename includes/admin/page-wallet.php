@@ -54,8 +54,35 @@ function twshop_wallet_render_ledger_table_rows( $rows, $show_user_column = fals
     }
 }
 
+/**
+ * 手動調整儲值金表單的 $_POST 處理，在 `twshop_wallet_balances_tab()` 輸出任何內容之前
+ * 呼叫，跟 `twshop_points_handle_manual_adjust()`（`page-points.php`）同一套慣例。
+ *
+ * @return string 'saved' 表示成功；非空字串代表要顯示的錯誤訊息；空字串代表沒有送出表單。
+ */
+function twshop_wallet_handle_manual_adjust( $user_id ) {
+    if ( ! isset( $_POST['twshop_wallet_manual_adjust'] ) ) return '';
+    check_admin_referer( 'twshop_wallet_manual_adjust' );
+    if ( ! current_user_can( 'manage_woocommerce' ) ) return '';
+
+    $paid  = isset( $_POST['twshop_wallet_manual_paid'] ) ? (float) wp_unslash( $_POST['twshop_wallet_manual_paid'] ) : 0.0;
+    $bonus = isset( $_POST['twshop_wallet_manual_bonus'] ) ? (float) wp_unslash( $_POST['twshop_wallet_manual_bonus'] ) : 0.0;
+    if ( 0.0 === round( $paid, 2 ) && 0.0 === round( $bonus, 2 ) ) return '本金與加贈金請至少填一個非 0 的數字。';
+
+    $reason = sanitize_text_field( wp_unslash( $_POST['twshop_wallet_reason'] ?? '' ) );
+    if ( '' === $reason ) $reason = '管理員手動調整';
+
+    $result = twshop_wallet_apply( $user_id, $paid, $bonus, 'adjust', 'adjust:' . wp_generate_uuid4(), array(
+        'note'       => $reason,
+        'created_by' => get_current_user_id(),
+    ) );
+
+    return is_wp_error( $result ) ? $result->get_error_message() : 'saved';
+}
+
 function twshop_wallet_balances_tab() {
     $user_id = isset( $_GET['user_id'] ) ? absint( $_GET['user_id'] ) : 0;
+    $notice  = $user_id ? twshop_wallet_handle_manual_adjust( $user_id ) : '';
     ?>
     <div class="twshop-panel">
         <?php twshop_panel_head( 'search', '搜尋會員' ); ?>
@@ -73,22 +100,36 @@ function twshop_wallet_balances_tab() {
     if ( $user_id ) {
         $user = get_userdata( $user_id );
         if ( $user ) {
+            if ( 'saved' === $notice ) {
+                echo '<div class="notice notice-success is-dismissible"><p>儲值金已調整。</p></div>';
+            } elseif ( $notice ) {
+                echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( $notice ) . '</p></div>';
+            }
+
             $balance = twshop_wallet_get_balance( $user_id );
             $history = twshop_wallet_get_ledger( $user_id, 20 );
             ?>
             <div class="twshop-panel">
                 <?php twshop_panel_head(
                     'wallet',
-                    esc_html( $user->display_name ) . '（' . esc_html( $user->user_email ) . '）的儲值金',
-                    '',
-                    array(
-                        'url'   => admin_url( 'user-edit.php?user_id=' . $user_id . '#twshop-wallet-management' ),
-                        'label' => '前往手動調整',
-                    )
+                    esc_html( $user->display_name ) . '（' . esc_html( $user->user_email ) . '）的儲值金'
                 ); ?>
                 <div class="twshop-panel-body">
                     <p style="font-size:22px; font-weight:bold; margin-bottom:4px;">NT$<?php echo esc_html( number_format( $balance['total'], 2 ) ); ?></p>
                     <p style="color:#666; margin-top:0;">本金 NT$<?php echo esc_html( number_format( $balance['paid'], 2 ) ); ?>／加贈金 NT$<?php echo esc_html( number_format( $balance['bonus'], 2 ) ); ?></p>
+
+                    <h4>手動增減儲值金</h4>
+                    <form method="post">
+                        <?php wp_nonce_field( 'twshop_wallet_manual_adjust' ); ?>
+                        <label>本金 <input type="number" step="0.01" name="twshop_wallet_manual_paid" value="" class="regular-text" placeholder="例如 500 或 -100" style="width:160px;"></label>
+                        &nbsp;
+                        <label>加贈金 <input type="number" step="0.01" name="twshop_wallet_manual_bonus" value="" class="regular-text" placeholder="例如 50" style="width:160px;"></label>
+                        <br><br>
+                        備註原因：<input type="text" name="twshop_wallet_reason" value="" class="regular-text" placeholder="手動調整">
+                        <button type="submit" name="twshop_wallet_manual_adjust" value="1" class="button button-primary" style="margin-left:8px;">儲存儲值金</button>
+                        <p class="description">本金／加贈金分開填寫，正數為增加、負數為扣除，留空視為 0；兩者皆為 0 時不會產生任何紀錄。</p>
+                    </form>
+
                     <h4>最近異動（最新 20 筆）</h4>
                     <table class="wp-list-table widefat fixed striped">
                         <thead>

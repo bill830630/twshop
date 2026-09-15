@@ -40,19 +40,38 @@ function twshop_points_get_balances_overview( $limit = 50 ) {
 }
 
 /**
- * 頁籤：會員餘額（v25.8.65 新增，比照儲值金「會員餘額」頁籤的既有版面）。純讀取，
- * 不對應任何 settings group。搜尋欄位重用 `twshop_render_customer_search_field()`
- * （`ui-components.php`，原本是儲值金頁專用，這次抽成共用 helper）。
+ * 手動調整點數表單的 $_POST 處理，在 `twshop_points_balances_tab()` 輸出任何內容之前
+ * 呼叫——跟「模組開關」頁（`twshop_system_modules_tab()`）同一套慣例：獨立 `<form>` +
+ * 手動 `$_POST` 處理，不走 `options.php`（點數餘額不是註冊過的 option，沒有 group 可掛）。
  *
- * 「前往手動調整」連到使用者個人資料頁的既有手動加減點數 UI（`twshop_user_profile_
- * management_ui()`，`#twshop-points-management`）——這段 UI 目前掛在 `member_tiers`
- * 模組開關底下（不是 `points`，見 CLAUDE.md 既有記載的既有落差），若站台只開了 `points`
- * 模組、關掉 `member_tiers`，這個連結會連到一個不存在的錨點。這是既有的跨模組耦合，
- * 這次沒有一併修正，維持現況。
+ * @return string 儲存結果訊息（空字串代表沒有送出表單，不用顯示任何通知）。
+ */
+function twshop_points_handle_manual_adjust( $user_id ) {
+    if ( ! isset( $_POST['twshop_points_manual_adjust'] ) ) return '';
+    check_admin_referer( 'twshop_points_manual_adjust' );
+    if ( ! current_user_can( 'manage_woocommerce' ) ) return '';
+
+    $amount = isset( $_POST['twshop_manual_points'] ) ? (int) $_POST['twshop_manual_points'] : 0;
+    if ( 0 === $amount ) return '請輸入非 0 的點數增減值。';
+
+    $reason       = sanitize_text_field( wp_unslash( $_POST['twshop_points_reason'] ?? '' ) );
+    $expire_days  = absint( $_POST['twshop_manual_points_expire_days'] ?? 0 );
+    twshop_apply_manual_points_adjustment( $user_id, $amount, $reason, $expire_days );
+
+    return 'saved';
+}
+
+/**
+ * 頁籤：會員餘額（v25.8.65 新增，比照儲值金「會員餘額」頁籤的既有版面；v25.8.66 起
+ * 手動調整點數的表單從使用者個人資料頁搬到這裡，見 `twshop_points_handle_manual_
+ * adjust()` 與 `twshop_apply_manual_points_adjustment()`，`points-engine.php`）。
+ * 搜尋欄位重用 `twshop_render_customer_search_field()`（`ui-components.php`，原本是
+ * 儲值金頁專用，這次抽成共用 helper）。
  */
 function twshop_points_balances_tab() {
     $user_id = isset( $_GET['user_id'] ) ? absint( $_GET['user_id'] ) : 0;
     $term    = twshop_points_term();
+    $notice  = $user_id ? twshop_points_handle_manual_adjust( $user_id ) : '';
     ?>
     <div class="twshop-panel">
         <?php twshop_panel_head( 'search', '搜尋會員' ); ?>
@@ -70,22 +89,43 @@ function twshop_points_balances_tab() {
     if ( $user_id ) {
         $user = get_userdata( $user_id );
         if ( $user ) {
+            if ( 'saved' === $notice ) {
+                echo '<div class="notice notice-success is-dismissible"><p>點數已調整。</p></div>';
+            } elseif ( $notice ) {
+                echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( $notice ) . '</p></div>';
+            }
+
             $points  = (int) get_user_meta( $user_id, 'twshop_reward_points', true );
             $history = get_user_meta( $user_id, 'twshop_points_history', true );
             if ( ! is_array( $history ) ) $history = array();
+            $expiry_days = (int) get_option( 'wc_points_expiry_days', 0 );
             ?>
             <div class="twshop-panel">
                 <?php twshop_panel_head(
                     'coins',
-                    esc_html( $user->display_name ) . '（' . esc_html( $user->user_email ) . '）的' . esc_html( $term ),
-                    '',
-                    array(
-                        'url'   => admin_url( 'user-edit.php?user_id=' . $user_id . '#twshop-points-management' ),
-                        'label' => '前往手動調整',
-                    )
+                    esc_html( $user->display_name ) . '（' . esc_html( $user->user_email ) . '）的' . esc_html( $term )
                 ); ?>
                 <div class="twshop-panel-body">
                     <p style="font-size:22px; font-weight:bold; margin-bottom:4px;"><?php echo esc_html( number_format( $points ) ); ?> <?php echo esc_html( $term ); ?></p>
+                    <?php $nearest_expiring = twshop_get_nearest_expiring_batch( $user_id ); ?>
+                    <?php if ( $nearest_expiring ) : ?>
+                        <p style="color:#b32d2e; margin-top:0;">有 <?php echo esc_html( $nearest_expiring['amount'] ); ?> 點將於 <?php echo esc_html( $nearest_expiring['expire'] ); ?> 到期</p>
+                    <?php endif; ?>
+
+                    <h4>手動增減<?php echo esc_html( $term ); ?></h4>
+                    <form method="post">
+                        <?php wp_nonce_field( 'twshop_points_manual_adjust' ); ?>
+                        <input type="number" name="twshop_manual_points" value="" class="regular-text" placeholder="例如: 10 或 -5" style="width:120px;">
+                        備註原因：<input type="text" name="twshop_points_reason" value="" class="regular-text" placeholder="手動調整">
+                        <?php if ( $expiry_days > 0 ) : ?>
+                            <br><br>
+                            自訂有效天數：<input type="number" name="twshop_manual_points_expire_days" min="1" class="small-text" placeholder="<?php echo esc_attr( $expiry_days ); ?>"> 天
+                            <span class="description">僅適用於本次輸入正數（增加）的點數，自入帳日起算；留空則依系統預設（<?php echo esc_html( $expiry_days ); ?> 天）</span>
+                        <?php endif; ?>
+                        <button type="submit" name="twshop_points_manual_adjust" value="1" class="button button-primary" style="margin-left:8px;">儲存<?php echo esc_html( $term ); ?></button>
+                        <p class="description">輸入正數為增加，輸入負數為扣除。</p>
+                    </form>
+
                     <h4>最近異動（最新 <?php echo count( $history ); ?> 筆，只保留最新 100 筆）</h4>
                     <table class="wp-list-table widefat fixed striped">
                         <thead>
