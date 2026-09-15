@@ -41,7 +41,10 @@ jQuery(document).ready(function($) {
         if ($(this).closest('.twshop-card-header-controls').length && $(this).closest('.twshop-rule-form').find('input[name="rule_id"]').val()) return;
         setDirty($(this).closest('.twshop-rule-form'), true);
     });
-    $container.on('click', '.twshop-chip-remove, .twshop-add-tier-row, .twshop-remove-tier-row', function() {
+    // 商品/分類/標籤三種欄位都是 selectWoo 多選，移除已選項目（點 tag 上的 x）本身就會
+    // 對底層 <select> 觸發原生 change 事件，上面的委派已經接住，這裡只剩階梯列本身不會
+    // 觸發 input/change 事件的新增/移除需要另外標記未儲存。
+    $container.on('click', '.twshop-add-tier-row, .twshop-remove-tier-row', function() {
         if (dirtyTrackingOn) setDirty($(this).closest('.twshop-rule-form'), true);
     });
     window.addEventListener('beforeunload', function(e) {
@@ -107,8 +110,15 @@ jQuery(document).ready(function($) {
         $card.find('.rule-bxgy-wrap').toggle(type === 'buy_x_get_y');
         $card.find('.rule-tiers-wrap').toggle(type === 'tiered_cart');
         $card.find('.rule-stack-wrap').toggle(STACKABLE_TYPES.indexOf(type) !== -1);
-        // 階梯式折扣的門檻寫在每一階裡，適用範圍/小計滿額對它沒有意義
-        $card.find('.rule-scope-section').toggle(type !== 'tiered_cart');
+        // 階梯式折扣的門檻寫在每一階裡，商品適用範圍/小計滿額對它沒有意義；但「套用對象」
+        // （會員等級）任何類型都要能設定，所以只隱藏範圍相關欄位（.rule-scope-toggle），
+        // 不整個隱藏「2. 套用對象與適用範圍」區塊（不然 tiered_cart 規則會連套用對象都改不了）。
+        var showScope = type !== 'tiered_cart';
+        $card.find('.rule-scope-toggle').toggle(showScope);
+        // 重新顯示時，商品/分類/標籤三選一的欄位要交回「適用範圍」下拉選單目前的值決定
+        // 顯示哪一個——上面那行 .toggle() 對所有 .condition-values-wrap 一視同仁地顯示，
+        // 還原不出「同時只顯示一種」的規則，靠這行 change 事件重新收斂回正確狀態。
+        if (showScope) $card.find('.twshop-condition-type').trigger('change');
 
         var hintKey = type === 'buy_x_get_y' ? 'buy_x_get_y' : (PRODUCT_LEVEL_TYPES.indexOf(type) !== -1 ? 'product' : 'cart');
         $card.find('.rule-condition-hint').text(CONDITION_HINTS[hintKey]);
@@ -211,8 +221,9 @@ jQuery(document).ready(function($) {
     $container.on('input change', '.twshop-card-body :input', function() {
         refreshAutoName($(this).closest('.twshop-rule-form'));
     });
-    // 分類/標籤方塊移除、階梯列增減不會觸發 input 事件，等 DOM 更新完再重算
-    $container.on('click', '.twshop-chip-remove, .twshop-add-tier-row, .twshop-remove-tier-row', function() {
+    // 階梯列增減不會觸發 input/change 事件，等 DOM 更新完再重算（商品/分類/標籤已改用
+    // selectWoo，移除已選項目會對 <select> 觸發原生 change，上面的委派已經接住）
+    $container.on('click', '.twshop-add-tier-row, .twshop-remove-tier-row', function() {
         var $card = $(this).closest('.twshop-rule-form');
         setTimeout(function() { refreshAutoName($card); }, 0);
     });
@@ -407,7 +418,6 @@ jQuery(document).ready(function($) {
                 var $copy = $($.parseHTML(res.data.html, document, false)).filter('.twshop-rule-form');
                 $form.after($copy);
                 initCards($copy);
-                $copy.find('.twshop-chip-field').trigger('twshop-chip-refresh');
                 $copy.find('.twshop-condition-type').trigger('change');
                 dirtyTrackingOn = true;
                 showCardStatus($copy, 'success', '已複製（預設停用，確認後再啟用）');

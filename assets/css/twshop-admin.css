@@ -270,7 +270,7 @@ input:checked + .twshop-slider:before { transform:translateX(20px); }
 .twshop-card-header-controls{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; font-size:12px; }
 .twshop-rule-schedule{ display:flex; flex-wrap:nowrap; align-items:center; gap:6px 10px; }
 .twshop-rule-schedule label{ font-weight:normal; display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
-.twshop-rule-schedule input{ width:150px; }
+.twshop-rule-schedule input{ width:190px; }
 #twshop-rule-toolbar-status{ margin:0; }
 /* 規則卡片內容統一格線（v25.8.50）：三欄等寬，長欄位跨兩欄或整列，所有區段同一套外觀 */
 .twshop-rule-card .twshop-card-body{ padding:16px 20px 20px; }
@@ -297,3 +297,16 @@ input:checked + .twshop-slider:before { transform:translateX(20px); }
 .twshop-rule-footer .rule-stack-wrap{ font-weight:normal; }
 @media (max-width: 1100px){ .twshop-rule-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); } .twshop-rule-grid > .is-wide{ grid-column:1 / -1; } }
 @media (max-width: 700px){ .twshop-rule-grid, .twshop-tier-row{ grid-template-columns:minmax(0, 1fr); } .twshop-rule-grid > .is-wide{ grid-column:auto; } }
+/* 手機版（v25.8.54）：卡片標題列在窄螢幕的問題不是格線（上面兩道已經處理），是標題列本身——
+   .twshop-rule-schedule 開始/結束時間原本 flex-wrap:nowrap，兩個固定寬度輸入框＋兩個標籤＋
+   清除連結硬擠在同一行，寬度加總遠超過手機螢幕，只能整批被壓縮到難以辨識或直接橫向溢出。
+   規則名稱欄同理是固定寬度，窄螢幕沒有縮的空間。這裡只調整這兩處，欄位格線本身在 700px
+   已經是單欄、不需要再處理。 */
+@media (max-width: 480px){
+	.twshop-rule-card .twshop-card-header{ gap:8px 10px; }
+	.twshop-rule-card .twshop-rule-name-input{ flex:1 1 100%; width:auto; min-width:0; }
+	.twshop-header-schedule{ width:100%; }
+	.twshop-rule-schedule{ flex-wrap:wrap; width:100%; }
+	.twshop-rule-schedule label{ flex:1 1 140px; }
+	.twshop-rule-schedule input{ width:100%; }
+}

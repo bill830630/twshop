@@ -1,50 +1,18 @@
 /**
- * 「下拉挑選、已選項目以方塊呈現」欄位的共用行為，供折扣規則／點數等後台頁面共用。
+ * 折扣規則「適用範圍」與紅利點數限制條件共用的「限制類型」切換行為。
  *
  * 自 ui-components.php 的內嵌 <script> 抽出（2026-08-21）。
+ *
+ * 2026-09 起，商品分類／標籤的複選欄位改用跟「選擇商品」（wc-product-search）同一套
+ * selectWoo 元件（見 twshop_render_chip_field()，ui-components.php）——分類/標籤是站台
+ * 本地資料、數量有限，不需要 AJAX 搜尋，selectWoo 對既有 <option> 做本地過濾即可，只是
+ * 換掉底層元件，操作方式跟「選擇商品」欄位一致。原本「下拉挑選＋已選項目另外顯示成方塊」
+ * 的 .twshop-chip-picker／.twshop-chip-box／.twshop-chip-source 三段式 DOM 與對應的
+ * renderChipsFor() 渲染邏輯已隨這次改動整個移除。「點數兌換商品」清單另外沿用
+ * .twshop-chip／.twshop-chip-box 的純視覺樣式（不經過這支檔案，見 redeemable-products.js），
+ * 不受影響。
  */
 (function($){
-    // 用事件委派 (delegated events) 綁定，動態新增的規則列/欄位不需要再手動重新初始化
-    function renderChipsFor($field) {
-        var $box = $field.find('.twshop-chip-box');
-        var $picker = $field.find('.twshop-chip-picker');
-        var $source = $field.find('.twshop-chip-source');
-
-        $box.empty();
-        $source.find('option:selected').each(function(){
-            var $opt = $(this);
-            var $chip = $('<span class="twshop-chip"></span>');
-            $chip.append($('<span></span>').text($opt.text()));
-            $chip.append($('<a href="#" class="twshop-chip-remove">&times;</a>').attr('data-val', $opt.val()));
-            $box.append($chip);
-        });
-
-        var selectedVals = $source.find('option:selected').map(function(){ return $(this).val(); }).get();
-        $picker.find('option').each(function(){
-            var $opt = $(this);
-            if (!$opt.val()) return;
-            $opt.toggle(selectedVals.indexOf($opt.val()) === -1);
-        });
-    }
-
-    $(document).on('change', '.twshop-chip-picker', function(){
-        var $picker = $(this);
-        var val = $picker.val();
-        if (!val) return;
-        var $field = $picker.closest('.twshop-chip-field');
-        $field.find('.twshop-chip-source option[value="' + val + '"]').prop('selected', true);
-        $picker.val('');
-        renderChipsFor($field);
-    });
-
-    $(document).on('click', '.twshop-chip-remove', function(e){
-        e.preventDefault();
-        var $field = $(this).closest('.twshop-chip-field');
-        var val = $(this).attr('data-val');
-        $field.find('.twshop-chip-source option[value="' + val + '"]').prop('selected', false);
-        renderChipsFor($field);
-    });
-
     // 「限制類型」下拉選單：切換顯示對應類型的複選欄位（折扣系統的商品/分類/標籤、點數系統的分類/標籤皆共用）
     // 切換類型時清空未使用類型已選的項目：不同類型若共用同一個欄位名稱（如點數系統的分類/標籤），
     // 隱藏欄位裡殘留的舊選擇仍會隨表單一起送出，必須主動清掉避免與新類型的資料混在一起
@@ -56,25 +24,15 @@
             var isActive = !!val && $wrap.hasClass('condition-values-' + val);
             $wrap.toggle(isActive);
             if (!isActive) {
-                $wrap.find('.twshop-chip-source option:selected').prop('selected', false);
-                $wrap.find('.twshop-chip-field').each(function(){ renderChipsFor($(this)); });
-                // 商品限制條件改用 AJAX 搜尋（wc-product-search，見 twshop_render_product_search_field()）
-                // 後新增：selectWoo 多選一樣要 .trigger('change') 才會連動更新畫面顯示，直接改
-                // DOM option 屬性不會反映在 selectWoo 的 UI 上。沒有 .wc-product-search 元素的
-                // wrap（分類/標籤）這行查無元素、無副作用。
-                $wrap.find('select.wc-product-search').val(null).trigger('change');
+                // 商品／分類／標籤三種欄位現在都是 selectWoo 多選（wc-product-search 或
+                // wc-enhanced-select），一律用 .val(null).trigger('change') 清空並同步畫面——
+                // 直接改 DOM option 的 selected 屬性不會反映在 selectWoo 的 UI 上。
+                $wrap.find('select.wc-product-search, select.wc-enhanced-select').val(null).trigger('change');
             }
         });
     });
 
-    // 動態插入的欄位（例如 AJAX 複製出來的規則卡片）用這個事件重繪已選項目
-    $(document).on('twshop-chip-refresh', '.twshop-chip-field', function(e){
-        e.stopPropagation();
-        renderChipsFor($(this));
-    });
-
     jQuery(document).ready(function($){
-        $('.twshop-chip-field').each(function(){ renderChipsFor($(this)); });
         $('.twshop-condition-type').trigger('change');
     });
 })(jQuery);

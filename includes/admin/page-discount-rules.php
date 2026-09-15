@@ -118,7 +118,7 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
             </span>
             <input type="text" name="name" class="twshop-rule-name-input" value="<?php echo esc_attr( $name ); ?>" placeholder="規則名稱（依設定自動產生）" aria-label="規則名稱" title="依下方設定自動產生，可直接修改；修改後不再自動更新，清空即恢復自動命名" required />
             <span class="twshop-badge twshop-badge--warn twshop-rule-dirty-badge" style="display:none;">未儲存</span>
-            <span class="twshop-card-header-controls" title="選好或清除後立即生效">
+            <span class="twshop-card-header-controls twshop-header-schedule" title="選好或清除後立即生效">
                 <span class="twshop-rule-schedule">
                     <label>開始 <input type="text" class="twshop-datetime-picker" name="start_time" value="<?php echo esc_attr( $s_time ); ?>" placeholder="立即" /></label>
                     <label>結束 <input type="text" class="twshop-datetime-picker" name="end_time" value="<?php echo esc_attr( $e_time ); ?>" placeholder="不限" /></label>
@@ -147,10 +147,6 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                             <option value="buy_x_get_y" <?php selected($type, 'buy_x_get_y'); ?>>買N送N (指定範圍內最便宜M件免費)</option>
                             <option value="tiered_cart" <?php selected($type, 'tiered_cart'); ?>>階梯式訂單折扣 (多門檻)</option>
                         </select>
-                    </div>
-                    <div class="twshop-rule-field">
-                        <label class="twshop-rule-label">套用對象</label>
-                        <select name="role"><option value="all" <?php selected($role, 'all'); ?>>所有顧客</option><?php foreach($tiers as $tier): ?><option value="<?php echo esc_attr($tier['slug']); ?>" <?php selected($role, $tier['slug']); ?>><?php echo esc_html($tier['name']); ?></option><?php endforeach; ?></select>
                     </div>
                     <div class="twshop-rule-field rule-value-wrap">
                         <label class="twshop-rule-label rule-value-label">折扣數值</label>
@@ -198,10 +194,14 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
             </section>
 
             <section class="twshop-rule-section rule-scope-section">
-                <h4 class="twshop-rule-section-title">2. 適用範圍與門檻</h4>
+                <h4 class="twshop-rule-section-title">2. 套用對象與適用範圍</h4>
                 <div class="twshop-rule-grid twshop-condition-scope">
-                    <p class="twshop-rule-hint is-full rule-condition-hint"></p>
                     <div class="twshop-rule-field">
+                        <label class="twshop-rule-label">套用對象</label>
+                        <select name="role"><option value="all" <?php selected($role, 'all'); ?>>所有顧客</option><?php foreach($tiers as $tier): ?><option value="<?php echo esc_attr($tier['slug']); ?>" <?php selected($role, $tier['slug']); ?>><?php echo esc_html($tier['name']); ?></option><?php endforeach; ?></select>
+                    </div>
+                    <p class="twshop-rule-hint is-full rule-condition-hint rule-scope-toggle"></p>
+                    <div class="twshop-rule-field rule-scope-toggle">
                         <label class="twshop-rule-label">適用範圍</label>
                         <select name="condition_type" class="twshop-condition-type">
                             <option value="">不限商品</option>
@@ -210,23 +210,23 @@ function twshop_get_rule_row_html( $r = array(), $tiers = array(), $cats = array
                             <option value="tag" <?php selected($cond_type, 'tag'); ?>>指定商品標籤</option>
                         </select>
                     </div>
-                    <div class="twshop-rule-field is-wide condition-values-wrap condition-values-product" style="display:none;">
+                    <div class="twshop-rule-field is-wide condition-values-wrap condition-values-product rule-scope-toggle" style="display:none;">
                         <label class="twshop-rule-label">選擇商品 <small>可複選</small></label>
                         <?php echo twshop_render_product_search_field( 'condition_values_product', $cond_products, true, '搜尋商品名稱或商品編號…' ); ?>
                     </div>
-                    <div class="twshop-rule-field is-wide condition-values-wrap condition-values-category" style="display:none;">
+                    <div class="twshop-rule-field is-wide condition-values-wrap condition-values-category rule-scope-toggle" style="display:none;">
                         <label class="twshop-rule-label">選擇商品分類 <small>可複選</small></label>
                         <?php echo twshop_render_chip_field( 'condition_values_category', $cond_cats, $cat_options ); ?>
                     </div>
-                    <div class="twshop-rule-field is-wide condition-values-wrap condition-values-tag" style="display:none;">
+                    <div class="twshop-rule-field is-wide condition-values-wrap condition-values-tag rule-scope-toggle" style="display:none;">
                         <label class="twshop-rule-label">選擇商品標籤 <small>可複選</small></label>
                         <?php echo twshop_render_chip_field( 'condition_values_tag', $cond_tags, $tag_options ); ?>
                     </div>
-                    <div class="twshop-rule-field is-row-start rule-min-amount-wrap">
+                    <div class="twshop-rule-field is-row-start rule-min-amount-wrap rule-scope-toggle">
                         <label class="twshop-rule-label">訂單小計滿 ($) <small>留空不限</small></label>
                         <input type="number" step="any" name="min_amount" class="twshop-rule-min-amount" value="<?php echo esc_attr( $min ); ?>" />
                     </div>
-                    <div class="twshop-rule-field is-wide twshop-rule-logic-wrap">
+                    <div class="twshop-rule-field is-wide twshop-rule-logic-wrap rule-scope-toggle">
                         <label class="twshop-rule-label">範圍與滿額要</label>
                         <div class="twshop-rule-checklist">
                             <label><input type="radio" name="logic" value="and" <?php checked($logic, 'and'); ?>> 兩者都符合</label>

@@ -193,25 +193,36 @@ function twshop_render_chip_field_assets() {
     <?php
 }
 
-// 通用「下拉選單挑選 + 已選項目以方塊呈現」欄位；$options 為 value => label 的清單，$name 為表單欄位名稱（實際 <select multiple name="{$name}[]">）
+/**
+ * 商品分類／標籤複選欄位；$options 為 value => label 的清單（slug => 名稱），$name 為表單
+ * 欄位名稱（實際 <select multiple name="{$name}[]">）。
+ *
+ * 跟「選擇商品」欄位（twshop_render_product_search_field()）用同一套 selectWoo 多選元件，
+ * 操作方式與外觀一致；差別只在這裡不用 AJAX（wc-product-search 那套是因為商品可能上千筆，
+ * 一次全撈不現實），分類/標籤數量有限，選項直接全部渲染成 <option>，selectWoo 對既有選項
+ * 做本地過濾即可，不需要遠端搜尋。
+ *
+ * 舊版是「下拉挑選＋已選項目另外顯示成方塊」的兩截式陽春元件（.twshop-chip-picker／
+ * .twshop-chip-box／.twshop-chip-source 三個元素），2026-09 改成這支之後已整個移除，
+ * 對應的 chip-field.js 渲染邏輯也一併拿掉（見該檔）。「點數兌換商品」清單另外沿用
+ * .twshop-chip／.twshop-chip-box 的純視覺樣式（不經過這支函式，見 redeemable-products.js），
+ * 不受影響。
+ */
 function twshop_render_chip_field( $name, $selected_values, $options ) {
     $selected_values = array_map( 'strval', (array) $selected_values );
     ob_start();
     ?>
-    <div class="twshop-chip-field">
-        <div class="twshop-chip-box"></div>
-        <select class="twshop-chip-picker" style="width:100%;">
-            <option value="">+ 點選加入項目...</option>
-            <?php foreach ( $options as $value => $label ) : ?>
-                <option value="<?php echo esc_attr( $value ); ?>"><?php echo esc_html( $label ); ?></option>
-            <?php endforeach; ?>
-        </select>
-        <select name="<?php echo esc_attr( $name ); ?>[]" multiple class="twshop-chip-source" style="display:none;">
-            <?php foreach ( $options as $value => $label ) : ?>
-                <option value="<?php echo esc_attr( $value ); ?>" <?php selected( in_array( (string) $value, $selected_values, true ) ); ?>><?php echo esc_html( $label ); ?></option>
-            <?php endforeach; ?>
-        </select>
-    </div>
+    <select
+        name="<?php echo esc_attr( $name ); ?>[]"
+        multiple="multiple"
+        class="twshop-chip-field wc-enhanced-select"
+        style="width:100%;"
+        data-placeholder="+ 點選加入項目…"
+    >
+        <?php foreach ( $options as $value => $label ) : ?>
+            <option value="<?php echo esc_attr( $value ); ?>" <?php selected( in_array( (string) $value, $selected_values, true ) ); ?>><?php echo esc_html( $label ); ?></option>
+        <?php endforeach; ?>
+    </select>
     <?php
     return ob_get_clean();
 }
