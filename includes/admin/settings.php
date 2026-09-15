@@ -159,12 +159,13 @@ function twshop_register_settings() {
     register_setting( 'wc_marketing_coupons_group', 'wc_coupon_dialog_trigger_applied_text', 'sanitize_text_field' );
     register_setting( 'wc_marketing_coupons_group', 'wc_coupon_dialog_heading', 'sanitize_text_field' );
 
-    // 行銷 ▸ 折扣規則（加購商品顯示文字小表單，規則本身走 AJAX 不受影響）
-    register_setting( 'wc_marketing_rules_group', 'wc_addon_section_title', 'sanitize_text_field' );
-    register_setting( 'wc_marketing_rules_group', 'wc_addon_btn_add_text', 'sanitize_text_field' );
-    register_setting( 'wc_marketing_rules_group', 'wc_addon_btn_incart_text', 'sanitize_text_field' );
-
     // 系統設定 ▸ 一般
+    // 加購商品顯示文字（v25.8.57 起從「折扣規則」頁移過來，跟其他一般設定收在同一個
+    // <form> 裡；改動時務必連 settings_fields() 的 group 一起改，不能只搬 HTML——見
+    // CLAUDE.md「已知踩坑：跨頁籤共用 settings group」。
+    register_setting( 'wc_system_general_group', 'wc_addon_section_title', 'sanitize_text_field' );
+    register_setting( 'wc_system_general_group', 'wc_addon_btn_add_text', 'sanitize_text_field' );
+    register_setting( 'wc_system_general_group', 'wc_addon_btn_incart_text', 'sanitize_text_field' );
     register_setting( 'wc_system_general_group', 'wc_login_btn_text', 'sanitize_text_field' );
     register_setting( 'wc_system_general_group', 'wc_register_btn_text', 'sanitize_text_field' );
     register_setting( 'wc_system_general_group', 'wc_badge_enabled', 'twshop_sanitize_yes_no' );

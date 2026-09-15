@@ -182,6 +182,23 @@ function twshop_system_general_tab() {
             </div>
 
             <div class="twshop-panel">
+                <?php twshop_panel_head( 'tag', '加購商品顯示文字' ); ?>
+                <div class="twshop-panel-body">
+                    <table class="form-table">
+                        <tr><th scope="row">加購區塊標題</th><td><input type="text" name="wc_addon_section_title" value="<?php echo esc_attr( twshop_option( 'wc_addon_section_title' ) ); ?>" class="regular-text" /></td></tr>
+                        <tr><th scope="row">加入加購按鈕文字</th><td><input type="text" name="wc_addon_btn_add_text" value="<?php echo esc_attr( twshop_option( 'wc_addon_btn_add_text' ) ); ?>" class="regular-text" /></td></tr>
+                        <tr>
+                            <th scope="row">移除按鈕文字（已在購物車時）</th>
+                            <td>
+                                <input type="text" name="wc_addon_btn_incart_text" value="<?php echo esc_attr( twshop_option( 'wc_addon_btn_incart_text' ) ); ?>" class="regular-text" />
+                                <p class="description">商品已在購物車時，按鈕將變為紅色移除鍵，顯示此文字。</p>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="twshop-panel">
                 <?php twshop_panel_head( 'package', '運送與付款方式名稱', '前台結帳頁顯示的名稱。<strong>留空則沿用該方式原本的名稱</strong>，不影響任何既有設定。WooCommerce 核心的運送/付款方式本來就能在自己的設定頁改名，這裡主要是給沒有開放名稱欄位的第三方外掛（例如綠界）用的。已成立的訂單不受影響——訂單上的名稱是結帳當下寫入的快照。' ); ?>
                 <div class="twshop-panel-body">
                     <?php

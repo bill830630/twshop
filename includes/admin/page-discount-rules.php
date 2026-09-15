@@ -20,32 +20,8 @@ function twshop_marketing_rules_tab() {
     if ( is_wp_error( $product_cats ) ) $product_cats = array();
     if ( is_wp_error( $product_tags ) ) $product_tags = array();
 
-    $addon_title      = twshop_option( 'wc_addon_section_title' );
-    $addon_btn_add    = twshop_option( 'wc_addon_btn_add_text' );
-    $addon_btn_incart = twshop_option( 'wc_addon_btn_incart_text' );
     ?>
-        <form action="options.php" method="post">
-            <?php settings_fields( 'wc_marketing_rules_group' ); ?>
-            <div class="twshop-panel">
-                <?php twshop_panel_head( 'tag', '加購商品顯示文字' ); ?>
-                <div class="twshop-panel-body">
-                    <table class="form-table">
-                        <tr><th scope="row">加購區塊標題</th><td><input type="text" name="wc_addon_section_title" value="<?php echo esc_attr( $addon_title ); ?>" class="regular-text" /></td></tr>
-                        <tr><th scope="row">加入加購按鈕文字</th><td><input type="text" name="wc_addon_btn_add_text" value="<?php echo esc_attr( $addon_btn_add ); ?>" class="regular-text" /></td></tr>
-                        <tr>
-                            <th scope="row">移除按鈕文字（已在購物車時）</th>
-                            <td>
-                                <input type="text" name="wc_addon_btn_incart_text" value="<?php echo esc_attr( $addon_btn_incart ); ?>" class="regular-text" />
-                                <p class="description">商品已在購物車時，按鈕將變為紅色移除鍵，顯示此文字。</p>
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-            <?php submit_button( '儲存加購文字' ); ?>
-        </form>
-
-        <p class="twshop-admin-intro">每一筆規則都可以單獨編輯與儲存，利用卡片標題左側圖示可拖曳變更優先順序！</p>
+        <p class="twshop-admin-intro">每一筆規則都可以單獨編輯與儲存，利用卡片標題左側圖示可拖曳變更優先順序！「加購商品顯示文字」設定已移至「系統設定 ▸ 一般」。</p>
 
         <?php echo twshop_render_rule_overlap_warnings( $rules ); ?>
 
