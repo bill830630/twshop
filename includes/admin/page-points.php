@@ -115,14 +115,26 @@ function twshop_points_balances_tab() {
                     <h4>手動增減<?php echo esc_html( $term ); ?></h4>
                     <form method="post">
                         <?php wp_nonce_field( 'twshop_points_manual_adjust' ); ?>
-                        <input type="number" name="twshop_manual_points" value="" class="regular-text" placeholder="例如: 10 或 -5" style="width:120px;">
-                        備註原因：<input type="text" name="twshop_points_reason" value="" class="regular-text" placeholder="手動調整">
+                        <div style="display:flex; flex-wrap:wrap; gap:15px; align-items:flex-end; margin-bottom:10px;">
+                            <div>
+                                <label style="display:block; font-weight:bold; margin-bottom:5px;"><?php echo esc_html( $term ); ?>增減</label>
+                                <input type="number" name="twshop_manual_points" value="" class="regular-text" placeholder="例如: 10 或 -5" style="width:200px;">
+                            </div>
+                            <?php if ( $expiry_days > 0 ) : ?>
+                                <div>
+                                    <label style="display:block; font-weight:bold; margin-bottom:5px;">自訂有效天數</label>
+                                    <input type="number" name="twshop_manual_points_expire_days" min="1" class="small-text" placeholder="<?php echo esc_attr( $expiry_days ); ?>"> 天
+                                </div>
+                            <?php endif; ?>
+                        </div>
                         <?php if ( $expiry_days > 0 ) : ?>
-                            <br><br>
-                            自訂有效天數：<input type="number" name="twshop_manual_points_expire_days" min="1" class="small-text" placeholder="<?php echo esc_attr( $expiry_days ); ?>"> 天
-                            <span class="description">僅適用於本次輸入正數（增加）的點數，自入帳日起算；留空則依系統預設（<?php echo esc_html( $expiry_days ); ?> 天）</span>
+                            <p class="description" style="margin-top:-6px;">有效天數僅適用於本次輸入正數（增加）的點數，自入帳日起算；留空則依系統預設（<?php echo esc_html( $expiry_days ); ?> 天）</p>
                         <?php endif; ?>
-                        <button type="submit" name="twshop_points_manual_adjust" value="1" class="button button-primary" style="margin-left:8px;">儲存<?php echo esc_html( $term ); ?></button>
+                        <div style="margin-bottom:10px;">
+                            <label style="display:block; font-weight:bold; margin-bottom:5px;">備註原因</label>
+                            <input type="text" name="twshop_points_reason" value="" class="regular-text" placeholder="手動調整" style="width:100%; max-width:500px;">
+                        </div>
+                        <button type="submit" name="twshop_points_manual_adjust" value="1" class="button button-primary">儲存<?php echo esc_html( $term ); ?></button>
                         <p class="description">輸入正數為增加，輸入負數為扣除。</p>
                     </form>
 

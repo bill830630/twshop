@@ -273,8 +273,14 @@ function twshop_membership_init() {
     // ── 儲值金（v25.8.61 第一階段：核心帳本；v25.8.62 第二階段：購物車折抵、結帳扣款、
     //    取消/退款自動退回、訂單 metabox；v25.8.63 第三階段：線上自助儲值；v25.8.64
     //    第四階段：後台列表頁、Email 通知。v25.8.66 起手動加扣搬到「儲值金 ▸ 會員餘額」
-    //    頁籤，不再掛使用者個人資料頁 hook，見 CLAUDE.md「儲值金模組」一節）───────
+    //    頁籤；v25.8.67 起線上儲值改用「儲值金商品」，逐項處理取代整單處理，見 CLAUDE.md
+    //    「儲值金模組」一節）───────────────────────────────────────
     if ( twshop_module_enabled( 'wallet' ) ) {
+        // 商品編輯頁「儲值金商品」欄位——不受模組開關以外的其他限制，跟商品折扣徽章
+        // 欄位（twshop_add_badge_product_fields()）掛在同一組 hook。
+        add_action( 'woocommerce_product_options_general_product_data', 'twshop_add_wallet_product_fields' );
+        add_action( 'woocommerce_process_product_meta', 'twshop_save_wallet_product_fields' );
+
         add_action( 'woocommerce_account_my-wallet_endpoint', 'twshop_my_wallet_endpoint_content' );
 
         // 購物車折抵（twshop_classic_cart_wallet() 本身在上面「不受模組開關影響」的
@@ -299,16 +305,17 @@ function twshop_membership_init() {
         add_action( 'add_meta_boxes_woocommerce_page_wc-orders', 'twshop_register_order_wallet_metabox' );
         add_action( 'wp_ajax_twshop_wallet_manual_return', 'twshop_ajax_wallet_manual_return' );
 
-        // 線上自助儲值（v25.8.63 新增，wallet-topup.php）：建立儲值訂單 → 付款完成入帳 →
-        // 訂單取消/退款/失敗時追回。跟上面「購物車折抵」共用同三個訂單狀態（cancelled／
-        // refunded／failed），但各自的 callback 內部第一行就依 _twshop_wallet_applied
-        // （消費訂單）或 _twshop_wallet_topup_order（儲值訂單）互斥判斷，同一張訂單不會
-        // 同時符合兩邊，兩組 hook 可以安全共存在同一個狀態變化上。
-        add_action( 'wp_ajax_twshop_create_wallet_topup_order', 'twshop_ajax_create_wallet_topup_order' );
+        // 線上自助儲值（v25.8.67 起改用「儲值金商品」，wallet-topup.php）：付款完成時
+        // 逐項掃描訂單裡的儲值金商品項目入帳 → 訂單取消/退款/失敗時逐項追回 → 部分退款時
+        // 只追回被退款的那個項目。跟上面「購物車折抵」共用 cancelled／refunded／failed
+        // 三個狀態，但各自的 callback 內部依訂單項目 meta（_twshop_wallet_topup_credited）
+        // 或訂單 meta（_twshop_wallet_applied）互斥判斷，同一張訂單的兩組 hook 可以安全
+        // 共存；`woocommerce_order_refunded` 同理，兩支各自處理不同方向的退回。
         add_action( 'woocommerce_payment_complete', 'twshop_wallet_credit_on_payment_complete', 10, 1 );
         foreach ( array( 'cancelled', 'refunded', 'failed' ) as $twshop_wallet_topup_revoke_status ) {
             add_action( 'woocommerce_order_status_' . $twshop_wallet_topup_revoke_status, 'twshop_wallet_revoke_topup_order', 15, 1 );
         }
+        add_action( 'woocommerce_order_refunded', 'twshop_wallet_handle_topup_item_refund', 15, 2 );
     }
 
     // ── 結帳與訂單管理強化（台灣地址、超商取貨、訂單物流資訊、訂單管理後台強化，

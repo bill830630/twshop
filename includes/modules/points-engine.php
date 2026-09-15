@@ -473,24 +473,29 @@ function twshop_award_points_on_order_complete( $order_id ) {
     $user_id = $order->get_customer_id();
     if ( ! $user_id ) return;
 
-    // 儲值訂單（顧客儲值金額本身）不算消費回饋點數——儲了 1000 元不該被當成「消費 1000」
-    // 發點數，之後真正花掉這筆儲值金買東西時，該筆消費訂單自己會再正常算一次點數，
-    // 不然同一筆錢等於被算了兩次。見 CLAUDE.md「儲值金模組」一節。
-    if ( 'yes' === $order->get_meta( '_twshop_wallet_topup_order' ) ) return;
-
     if ( get_post_meta( $order_id, '_twshop_points_awarded', true ) ) return;
     update_post_meta( $order_id, '_twshop_points_awarded', 'yes' );
 
     $base_earn_rate = (int) get_option( 'wc_points_base_rate', 100 );
     if ( $base_earn_rate <= 0 ) $base_earn_rate = 100;
 
+    // 儲值金商品項目（顧客購買儲值金本身）不算消費回饋點數——買了 1000 元儲值金不該被
+    // 當成「消費 1000」發點數，之後真正花掉這筆儲值金買東西時，該筆消費訂單自己會再
+    // 正常算一次點數，不然同一筆錢等於被算了兩次。見 CLAUDE.md「儲值金模組」一節。
+    // 逐項跳過（而非整張訂單排除，v25.8.67 起）：訂單可能同時有儲值金商品與一般商品，
+    // 一般商品的消費額仍要正常發點數。
     $items_data = array();
     foreach ( $order->get_items() as $item ) {
         $product = $item->get_product();
         if ( ! $product ) continue;
+        if ( 'yes' === $product->get_meta( '_twshop_wallet_product' ) ) continue;
         $items_data[] = array( 'product_id' => $product->get_id(), 'total' => $item->get_total() + $item->get_total_tax() );
     }
-    $total_excl_shipping = $order->get_total() - $order->get_shipping_total() - $order->get_shipping_tax();
+    // $total_excl_shipping 是「沒有設定限制獲得點數商品」時 twshop_get_earn_base_amount()
+    // 直接使用的基準值，不是從 $items_data 算出來的——只跳過陣列元素不會讓它跟著減少，
+    // 必須額外扣掉儲值金商品項目的金額，否則沒設限制條件的站台仍會把儲值金商品算進點數。
+    $total_excl_shipping = $order->get_total() - $order->get_shipping_total() - $order->get_shipping_tax()
+        - twshop_get_order_wallet_product_total( $order );
     $earn_base_amount    = twshop_get_earn_base_amount( $items_data, $total_excl_shipping );
 
     $base_points = floor( $earn_base_amount / $base_earn_rate );

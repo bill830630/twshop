@@ -160,6 +160,11 @@ function twshop_send_birthday_gift_notice_email( $to, $subject, $message ) {
  * 的部分（沿用 get_total() 已扣除儲值金折抵後的原值，跟優惠券/點數折抵的既有計算
  * 方式一致）。
  *
+ * 另外扣掉這張訂單裡儲值金商品項目的金額（v25.8.67 起）——買儲值金本身不是消費，
+ * 理由同 `twshop_award_points_on_order_complete()` 的排除註解：儲值當下不算，真正
+ * 花掉這筆儲值金買東西時該筆消費訂單自然會計入，不能兩邊都算。訂單可能同時有儲值金
+ * 商品與一般商品，只扣儲值金商品那部分，一般商品的消費額仍正常計入。
+ *
  * twshop_get_user_spent_since() 與 twshop_find_qualifying_order_date() 必須共用同一套
  * 邏輯，不能各自公式——否則會出現「前者算出的累積總額已達到升級門檻，後者卻因為公式
  * 不同、永遠找不到達標的那個日期」這種自相矛盾的結果。
@@ -169,21 +174,8 @@ function twshop_get_order_total_for_tier_spend( $order ) {
     if ( 'yes' === twshop_option( 'wc_wallet_tier_spend_full_amount' ) ) {
         $total += (float) $order->get_meta( '_twshop_wallet_applied' );
     }
+    $total -= twshop_get_order_wallet_product_total( $order );
     return $total;
-}
-
-/**
- * 排除儲值訂單（`_twshop_wallet_topup_order` meta）的共用 meta_query 片段。儲值訂單
- * 本身（顧客儲值金額）不算消費額，理由同 twshop_award_points_on_order_complete() 的
- * 排除註解——儲值當下不算，真正花掉這筆錢買東西時該筆消費訂單自然會計入。
- */
-function twshop_exclude_wallet_topup_orders_meta_query() {
-    return array(
-        array(
-            'key'     => '_twshop_wallet_topup_order',
-            'compare' => 'NOT EXISTS',
-        ),
-    );
 }
 
 function twshop_get_user_spent_since( $user_id, $since_date = null, $flush_cache = false ) {
@@ -210,11 +202,13 @@ function twshop_get_user_spent_since( $user_id, $since_date = null, $flush_cache
         return $cache[ $cache_key ];
     }
 
+    // v25.8.67 起不再用 meta_query 排除「整張訂單」——訂單可能同時有儲值金商品與一般
+    // 商品，排除要靠 twshop_get_order_total_for_tier_spend() 逐項扣除，不能在查詢層級
+    // 整張跳過（否則混合訂單裡一般商品的消費額也會被誤排除）。
     $args = array(
         'customer_id' => $user_id,
         'status'      => 'completed',
         'limit'       => -1,
-        'meta_query'  => twshop_exclude_wallet_topup_orders_meta_query(),
     );
     if ( $since_date ) $args['date_created'] = '>=' . $since_date;
     $orders = wc_get_orders( $args );
@@ -257,13 +251,13 @@ function twshop_flush_user_spent_cache() {
  * 用來決定「造成升級/首次達標的那筆消費」，作為新一輪等級週期的起算日。
  */
 function twshop_find_qualifying_order_date( $user_id, $since_date, $threshold ) {
+    // v25.8.67 起不再用 meta_query 排除整張訂單，理由同 twshop_get_user_spent_since()。
     $args = array(
         'customer_id' => $user_id,
         'status'      => 'completed',
         'limit'       => -1,
         'orderby'     => 'date',
         'order'       => 'ASC',
-        'meta_query'  => twshop_exclude_wallet_topup_orders_meta_query(),
     );
     if ( $since_date ) $args['date_created'] = '>=' . $since_date;
     $orders = wc_get_orders( $args );
