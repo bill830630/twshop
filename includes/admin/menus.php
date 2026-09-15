@@ -86,6 +86,9 @@ function twshop_register_menus() {
     if ( twshop_module_enabled( 'shopee_sync' ) ) {
         add_submenu_page( 'wc-general-settings', '蝦皮串接', '蝦皮串接', 'manage_woocommerce', 'twshop-shopee', 'twshop_shopee_render_page' );
     }
+    if ( twshop_module_enabled( 'wallet' ) ) {
+        add_submenu_page( 'wc-general-settings', '儲值金', '儲值金', 'manage_woocommerce', 'twshop-wallet', 'twshop_wallet_render_page' );
+    }
     add_submenu_page( 'wc-general-settings', '系統設定', '系統設定', 'manage_woocommerce', 'twshop-system', 'twshop_system_render_page' );
 }
 

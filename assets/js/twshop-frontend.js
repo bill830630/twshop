@@ -392,6 +392,41 @@
         });
     });
 
+    // Wallet（儲值金）線上儲值：建立只有一筆費用項目的儲值訂單，成功後導向付款頁
+    // （twshop_ajax_create_wallet_topup_order()，wallet-topup.php）。方案按鈕與自訂金額
+    // 輸入共用同一支 helper，差別只在送出的參數（plan_id 或 custom_amount）。
+    function twshopCreateWalletTopupOrder(extraData, $btn) {
+        var originalText = $btn.text();
+        $btn.prop('disabled', true).text('處理中...');
+        $.post(twshopData.ajaxUrl, $.extend({
+            action:       'twshop_create_wallet_topup_order',
+            twshop_nonce: twshopData.nonce
+        }, extraData), function (res) {
+            if (res && res.success && res.data && res.data.redirect) {
+                window.location.href = res.data.redirect;
+                return;
+            }
+            alert((res && res.data && res.data.message) || '建立儲值訂單失敗，請稍後再試。');
+            $btn.prop('disabled', false).text(originalText);
+        }).fail(function () {
+            alert('建立儲值訂單失敗，請檢查網路連線後重試。');
+            $btn.prop('disabled', false).text(originalText);
+        });
+    }
+    $(document.body).on('click', '.twshop-wallet-plan-btn', function (e) {
+        e.preventDefault();
+        twshopCreateWalletTopupOrder({ plan_id: $(this).data('plan_id') }, $(this));
+    });
+    $(document.body).on('click', '#twshop_wallet_custom_topup_btn', function (e) {
+        e.preventDefault();
+        var amount = $('#twshop_wallet_custom_amount').val();
+        if (!amount || parseFloat(amount) <= 0) {
+            alert('請輸入要儲值的金額。');
+            return;
+        }
+        twshopCreateWalletTopupOrder({ custom_amount: amount }, $(this));
+    });
+
     // Points-for-Product Redemption
     $(document.body).on('click', '.twshop-redeem-product-btn', function (e) {
         e.preventDefault();

@@ -516,6 +516,11 @@ function twshop_award_points_on_order_complete( $order_id ) {
     $user_id = $order->get_customer_id();
     if ( ! $user_id ) return;
 
+    // 儲值訂單（顧客儲值金額本身）不算消費回饋點數——儲了 1000 元不該被當成「消費 1000」
+    // 發點數，之後真正花掉這筆儲值金買東西時，該筆消費訂單自己會再正常算一次點數，
+    // 不然同一筆錢等於被算了兩次。見 CLAUDE.md「儲值金模組」一節。
+    if ( 'yes' === $order->get_meta( '_twshop_wallet_topup_order' ) ) return;
+
     if ( get_post_meta( $order_id, '_twshop_points_awarded', true ) ) return;
     update_post_meta( $order_id, '_twshop_points_awarded', 'yes' );
 

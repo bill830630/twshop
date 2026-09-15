@@ -3,7 +3,7 @@
  * Plugin Name: Ultimate E-commerce
  * Plugin URI: https://nibill-studio.com/
  * Description: 具備會員分級、動態折扣規則、優惠卡券、紅利點數系統、智能贈品與加購引擎的終極電商。
- * Version: 25.8.62
+ * Version: 25.8.63
  * Author: NiBill
  * Author URI: https://nibill-studio.com/
  * Text Domain: ultimate-ecommerce
@@ -60,6 +60,8 @@ require_once TWSHOP_PLUGIN_DIR . 'includes/modules/membership.php';
 require_once TWSHOP_PLUGIN_DIR . 'includes/modules/wallet-core.php';
 require_once TWSHOP_PLUGIN_DIR . 'includes/modules/wallet-account.php';
 require_once TWSHOP_PLUGIN_DIR . 'includes/modules/wallet-checkout.php';
+require_once TWSHOP_PLUGIN_DIR . 'includes/modules/wallet-topup.php';
+require_once TWSHOP_PLUGIN_DIR . 'includes/admin/page-wallet.php';
 require_once TWSHOP_PLUGIN_DIR . 'includes/modules/shopee-api.php';
 require_once TWSHOP_PLUGIN_DIR . 'includes/modules/shopee-products.php';
 require_once TWSHOP_PLUGIN_DIR . 'includes/modules/shopee-orders.php';

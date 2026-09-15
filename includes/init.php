@@ -270,9 +270,9 @@ function twshop_membership_init() {
         add_action( 'twshop_send_points_expiry_notice', 'twshop_send_points_expiry_notice_email', 10, 3 );
     }
 
-    // ── 儲值金（v25.8.61 新增第一階段：核心帳本；v25.8.62 新增第二階段：購物車折抵、
-    //    結帳扣款、取消/退款自動退回、訂單 metabox。線上儲值（第三階段）尚未實作，
-    //    見 CLAUDE.md「儲值金模組」一節）─────────────────────────────────────
+    // ── 儲值金（v25.8.61 第一階段：核心帳本；v25.8.62 第二階段：購物車折抵、結帳扣款、
+    //    取消/退款自動退回、訂單 metabox；v25.8.63 第三階段：線上自助儲值。第四階段
+    //    （後台列表頁、Email 通知）尚未實作，見 CLAUDE.md「儲值金模組」一節）───────
     if ( twshop_module_enabled( 'wallet' ) ) {
         add_action( 'profile_personal_options', 'twshop_wallet_user_profile_management_ui' );
         add_action( 'edit_user_profile', 'twshop_wallet_user_profile_management_ui' );
@@ -301,6 +301,17 @@ function twshop_membership_init() {
         add_action( 'add_meta_boxes_shop_order', 'twshop_register_order_wallet_metabox' );
         add_action( 'add_meta_boxes_woocommerce_page_wc-orders', 'twshop_register_order_wallet_metabox' );
         add_action( 'wp_ajax_twshop_wallet_manual_return', 'twshop_ajax_wallet_manual_return' );
+
+        // 線上自助儲值（v25.8.63 新增，wallet-topup.php）：建立儲值訂單 → 付款完成入帳 →
+        // 訂單取消/退款/失敗時追回。跟上面「購物車折抵」共用同三個訂單狀態（cancelled／
+        // refunded／failed），但各自的 callback 內部第一行就依 _twshop_wallet_applied
+        // （消費訂單）或 _twshop_wallet_topup_order（儲值訂單）互斥判斷，同一張訂單不會
+        // 同時符合兩邊，兩組 hook 可以安全共存在同一個狀態變化上。
+        add_action( 'wp_ajax_twshop_create_wallet_topup_order', 'twshop_ajax_create_wallet_topup_order' );
+        add_action( 'woocommerce_payment_complete', 'twshop_wallet_credit_on_payment_complete', 10, 1 );
+        foreach ( array( 'cancelled', 'refunded', 'failed' ) as $twshop_wallet_topup_revoke_status ) {
+            add_action( 'woocommerce_order_status_' . $twshop_wallet_topup_revoke_status, 'twshop_wallet_revoke_topup_order', 15, 1 );
+        }
     }
 
     // ── 結帳與訂單管理強化（台灣地址、超商取貨、訂單物流資訊、訂單管理後台強化，

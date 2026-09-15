@@ -179,6 +179,15 @@ function twshop_register_settings() {
     register_setting( 'wc_system_general_group', 'wc_shipping_method_titles', 'twshop_sanitize_method_titles' );
     register_setting( 'wc_system_general_group', 'wc_payment_method_titles', 'twshop_sanitize_method_titles' );
 
+    // 儲值金 ▸ 儲值方案（v25.8.63 新增，見 CLAUDE.md「儲值金模組 ▸ 線上儲值」一節）
+    register_setting( 'wc_wallet_plans_group', 'wc_wallet_topup_plans', 'twshop_sanitize_wallet_plans' );
+    register_setting( 'wc_wallet_plans_group', 'wc_wallet_allow_custom_amount', 'twshop_sanitize_yes_no' );
+    register_setting( 'wc_wallet_plans_group', 'wc_wallet_custom_min', 'floatval' );
+    register_setting( 'wc_wallet_plans_group', 'wc_wallet_custom_max', 'floatval' );
+
+    // 儲值金 ▸ 設定
+    register_setting( 'wc_wallet_settings_group', 'wc_wallet_tier_spend_full_amount', 'twshop_sanitize_yes_no' );
+
     // 會員 ▸ 頁籤管理
     register_setting( 'wc_member_tabs_group', 'wc_membership_tab_name', 'sanitize_text_field' );
     register_setting( 'wc_member_tabs_group', 'wc_general_tab_name', 'sanitize_text_field' );
@@ -319,6 +328,35 @@ function twshop_sanitize_tiers( $input ) {
         }
     }
     return $sanitized_data;
+}
+
+/**
+ * 儲值方案清單。`id` 留空（新方案）時自動產生一個穩定 slug，之後編輯同一筆方案不會
+ * 換 id——`id` 是 AJAX 建立儲值訂單時查找方案的依據（twshop_ajax_create_wallet_topup_order()，
+ * wallet-topup.php），也是 twshop_wallet_get_order_topup_credited() 追溯訂單使用哪個方案
+ * 的參考（存在訂單 meta `_twshop_wallet_topup_plan_id`），id 换掉會讓舊訂單的方案追溯對不上。
+ * `enabled` 走隱藏欄位＋checkbox 同步（見 wallet-plans.js），不是原始 checkbox，
+ * 陣列索引不會因為勾選狀態不同而跟 amount/bonus 錯位。
+ */
+function twshop_sanitize_wallet_plans( $input ) {
+    $sanitized = array();
+    if ( is_array( $input ) && ! empty( $input['amount'] ) ) {
+        for ( $i = 0; $i < count( $input['amount'] ); $i++ ) {
+            $amount = round( (float) ( $input['amount'][ $i ] ?? 0 ), 2 );
+            if ( $amount <= 0 ) continue;
+
+            $id = sanitize_key( $input['id'][ $i ] ?? '' );
+            if ( '' === $id ) $id = 'plan_' . wp_generate_password( 8, false, false );
+
+            $sanitized[] = array(
+                'id'      => $id,
+                'amount'  => $amount,
+                'bonus'   => round( max( 0, (float) ( $input['bonus'][ $i ] ?? 0 ) ), 2 ),
+                'enabled' => ( 'yes' === ( $input['enabled'][ $i ] ?? 'no' ) ) ? 'yes' : 'no',
+            );
+        }
+    }
+    return $sanitized;
 }
 
 /**
