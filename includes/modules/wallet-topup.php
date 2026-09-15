@@ -1,20 +1,81 @@
 <?php
 /**
- * 儲值金：線上儲值改用「儲值金商品」（v25.8.67 起，取代原本的「儲值方案」機制）。
+ * 儲值金：線上儲值改用「儲值金商品」（v25.8.67 起取代原本的「儲值方案」機制；v25.8.68
+ * 起「儲值金商品」本身改成獨立的 WooCommerce 商品類型，取代掛在簡單商品上的 checkbox）。
  *
- * 顧客把標記為「儲值金商品」的商品加進購物車、走正常結帳流程（可以跟其他一般商品
- * 同一張訂單一起買），付款完成後依商品設定的「儲值金額度」逐項入帳。跟結帳折抵
- * （wallet-checkout.php）是相反方向：那邊是「花掉」儲值金，這裡是「儲值金怎麼進來」。
+ * 顧客把「儲值金商品」加進購物車、走正常結帳流程（可以跟其他一般商品同一張訂單一起
+ * 買），付款完成後依商品設定的「儲值金額度」逐項入帳。跟結帳折抵（wallet-checkout.php）
+ * 是相反方向：那邊是「花掉」儲值金，這裡是「儲值金怎麼進來」。
  *
- * 商品 meta `_twshop_wallet_product`（yes/no）是「這是儲值金商品」的唯一判斷依據；
- * `_twshop_wallet_credit_amount` 是每件實際入帳多少（面額）。訂單不再有「整張訂單是
- * 儲值訂單」這個概念——一張訂單可能同時有儲值金商品與一般商品，逐項處理。
+ * 「這是不是儲值金商品」的唯一判斷依據是商品類型本身（`$product->is_type('wallet_credit')`），
+ * 不是 meta——比照競標／預購這類第三方外掛在「商品類型」下拉多一個選項的既有做法，商品
+ * 編輯頁的類型選單會多一個「儲值金商品」，選了才會出現「儲值金額度」欄位（售價／稅別
+ * 沿用 WooCommerce 核心既有欄位，見 `assets/js/admin/wallet-credit-product.js`）。
+ * `_twshop_wallet_credit_amount` 是每件實際入帳多少（面額）；商品類型本身不需要額外的
+ * on/off meta。訂單不再有「整張訂單是儲值訂單」這個概念——一張訂單可能同時有儲值金商品
+ * 與一般商品，逐項處理。
  *
  * 加贈金不是後台另外設定的欄位，是「顧客實付金額」與「商品面額」的差額自動算出來的
  * （面額 1000、售價 900 → 本金 900 + 加贈 100；面額等於售價則沒有加贈）。
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
+
+/**
+ * 判斷某個商品是不是儲值金商品，全站唯一入口——不要在別處直接寫
+ * `$product->is_type('wallet_credit')`，日後如果判斷方式需要調整（例如同時相容一段時間
+ * 內尚未轉換類型的舊資料）只需要改這一支。
+ */
+function twshop_is_wallet_credit_product( $product ) {
+    return $product instanceof WC_Product && $product->is_type( 'wallet_credit' );
+}
+
+/**
+ * 商品類型下拉選單新增「儲值金商品」選項（filter `product_type_selector`）。
+ */
+function twshop_wallet_credit_register_product_type( $types ) {
+    $types['wallet_credit'] = '儲值金商品';
+    return $types;
+}
+
+/**
+ * 指定 product_type=wallet_credit 要用哪個 PHP 類別（filter `woocommerce_product_class`）。
+ * 類別定義本身刻意獨立成一個檔案、lazy require——見 class-wc-product-wallet-credit.php
+ * 開頭的說明，不能在外掛載入當下就 `class ... extends WC_Product_Simple`。
+ */
+function twshop_wallet_credit_product_class( $classname, $product_type ) {
+    if ( 'wallet_credit' !== $product_type ) return $classname;
+
+    if ( ! class_exists( 'WC_Product_Wallet_Credit' ) ) {
+        require_once TWSHOP_PLUGIN_DIR . 'includes/modules/class-wc-product-wallet-credit.php';
+    }
+    return 'WC_Product_Wallet_Credit';
+}
+
+/**
+ * 商品編輯頁分頁可見性（filter `woocommerce_product_data_tabs`）：
+ * - 「庫存」補上 show_if_wallet_credit——核心預設只有 simple/variable/grouped/external
+ *   四種類型才顯示這個頁籤，儲值金商品若想限制發行數量（例如限量的某個面額）需要用到。
+ * - 「運送」補上 hide_if_wallet_credit——雖然存檔時會強制勾選虛擬商品、核心的
+ *   hide_if_virtual 屆時也會生效，但新增商品當下（尚未存檔過）「虛擬商品」checkbox
+ *   還沒被勾上，只靠 hide_if_virtual 會讓運送頁籤在第一次存檔前短暫可見，直接明講
+ *   hide_if_wallet_credit 讓它從一開始就不出現，不倚賴存檔後才生效的虛擬商品狀態。
+ * - 「關聯商品」與商品規格/庫存無關，「商品屬性」「商品規格」是可變商品的機制（儲值金
+ *   商品不支援可變規格，見 CLAUDE.md），三者都補上 hide_if_wallet_credit 讓商品編輯頁
+ *   只保留跟儲值金商品有關的頁籤，介面更聚焦。「進階」（購買備註/選單順序/評論）維持
+ *   顯示，跟其他商品類型一致。
+ */
+function twshop_wallet_credit_product_data_tabs( $tabs ) {
+    if ( isset( $tabs['inventory']['class'] ) ) {
+        $tabs['inventory']['class'][] = 'show_if_wallet_credit';
+    }
+    foreach ( array( 'shipping', 'linked_product', 'attribute', 'variations' ) as $tab ) {
+        if ( isset( $tabs[ $tab ]['class'] ) ) {
+            $tabs[ $tab ]['class'][] = 'hide_if_wallet_credit';
+        }
+    }
+    return $tabs;
+}
 
 /**
  * 這張訂單裡所有「儲值金商品」項目的金額加總（`get_total()+get_total_tax()`）。
@@ -27,24 +88,21 @@ function twshop_get_order_wallet_product_total( $order ) {
     $total = 0.0;
     foreach ( $order->get_items() as $item ) {
         $product = $item->get_product();
-        if ( ! $product || 'yes' !== $product->get_meta( '_twshop_wallet_product' ) ) continue;
+        if ( ! twshop_is_wallet_credit_product( $product ) ) continue;
         $total += (float) $item->get_total() + (float) $item->get_total_tax();
     }
     return round( $total, 2 );
 }
 
 /**
- * 商品編輯頁欄位：標記商品為「儲值金商品」＋設定面額。比照
- * `twshop_add_badge_product_fields()`（discount-engine.php）的既有寫法，只是換一組欄位。
- * 只在簡單商品顯示——多個面額用多個簡單商品表示，不支援可變商品規格。
+ * 商品編輯頁「一般」分頁的儲值金專屬欄位——只有「儲值金額度」，售價／稅別欄位是
+ * WooCommerce 核心本來就有的欄位（`_regular_price`/`_sale_price`/`_tax_status` 等），
+ * 靠 `assets/js/admin/wallet-credit-product.js` 補上 show_if_wallet_credit class 讓它們
+ * 對這個新商品類型也顯示，不重刻一份、存檔也不用另外處理（核心存檔邏輯本來就對所有
+ * 商品類型一視同仁讀取這些 `$_POST` 欄位，見該檔開頭說明）。
  */
-function twshop_add_wallet_product_fields() {
-    echo '<div class="options_group show_if_simple twshop-wallet-product-fields">';
-    woocommerce_wp_checkbox( array(
-        'id'          => '_twshop_wallet_product',
-        'label'       => '儲值金商品',
-        'description' => '勾選後，顧客購買這個商品會依下方「儲值金額度」入帳到會員的儲值金餘額，不是把商品本身出貨給顧客。儲存後會自動勾選「虛擬商品」，結帳不會要求填運送資訊。',
-    ) );
+function twshop_add_wallet_credit_product_fields() {
+    echo '<div class="options_group show_if_wallet_credit">';
     woocommerce_wp_text_input( array(
         'id'                => '_twshop_wallet_credit_amount',
         'label'             => '儲值金額度（每件）',
@@ -57,24 +115,37 @@ function twshop_add_wallet_product_fields() {
     echo '</div>';
 }
 
-function twshop_save_wallet_product_fields( $post_id ) {
-    $is_wallet_product = isset( $_POST['_twshop_wallet_product'] ) ? 'yes' : 'no';
-    update_post_meta( $post_id, '_twshop_wallet_product', $is_wallet_product );
-
+/**
+ * 掛 `woocommerce_process_product_meta_wallet_credit`（WooCommerce 依商品類型觸發的
+ * 存檔 action，只有 product-type=wallet_credit 才會呼叫，不需要在函式裡再判斷一次類型）。
+ */
+function twshop_save_wallet_credit_product_fields( $post_id ) {
     $credit_amount = isset( $_POST['_twshop_wallet_credit_amount'] )
         ? round( (float) wp_unslash( $_POST['_twshop_wallet_credit_amount'] ), 2 )
         : 0.0;
     update_post_meta( $post_id, '_twshop_wallet_credit_amount', $credit_amount );
 
-    // 儲值金商品不需要出貨，強制勾選「虛擬商品」——避免管理員忘記勾 WooCommerce 原生的
-    // 虛擬商品欄位，導致結帳被要求填運送地址、混合購買時整張訂單卡在等出貨。
-    if ( 'yes' === $is_wallet_product ) {
-        $product = wc_get_product( $post_id );
-        if ( $product && ! $product->is_virtual() ) {
-            $product->set_virtual( true );
-            $product->save();
-        }
+    // 儲值金商品不需要出貨，強制勾選「虛擬商品」——這個商品類型本來就不顯示「虛擬商品」
+    // 勾選框（見 wc_get_default_product_type_options() 的 show_if_simple 限制，我們的
+    // 類型不在其中，自動隱藏），管理員完全不需要、也沒有地方可以手動處理這件事。
+    $product = wc_get_product( $post_id );
+    if ( $product && ! $product->is_virtual() ) {
+        $product->set_virtual( true );
+        $product->save();
     }
+}
+
+/**
+ * 只在商品編輯畫面載入 `wallet-credit-product.js`（`assets/js/admin/`）——那支腳本要
+ * 補的 class 只有這個畫面用得到，其餘後台頁面不需要。
+ */
+function twshop_enqueue_wallet_credit_product_admin_script( $hook ) {
+    if ( 'post.php' !== $hook && 'post-new.php' !== $hook ) return;
+
+    $screen = get_current_screen();
+    if ( ! $screen || 'product' !== $screen->post_type ) return;
+
+    twshop_enqueue_asset_script( 'admin/wallet-credit-product', array(), array( 'jquery', 'wc-admin-product-meta-boxes' ) );
 }
 
 /**
@@ -156,7 +227,7 @@ function twshop_wallet_credit_on_payment_complete( $order_id ) {
 
     foreach ( $order->get_items() as $item_id => $item ) {
         $product = $item->get_product();
-        if ( ! $product || 'yes' !== $product->get_meta( '_twshop_wallet_product' ) ) continue;
+        if ( ! twshop_is_wallet_credit_product( $product ) ) continue;
         if ( 'yes' === $item->get_meta( '_twshop_wallet_topup_credited' ) ) continue; // 已處理過，不重複入帳、不重複算進本次通知信
 
         $credit_per_unit = round( (float) $product->get_meta( '_twshop_wallet_credit_amount' ), 2 );

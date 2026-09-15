@@ -273,13 +273,18 @@ function twshop_membership_init() {
     // ── 儲值金（v25.8.61 第一階段：核心帳本；v25.8.62 第二階段：購物車折抵、結帳扣款、
     //    取消/退款自動退回、訂單 metabox；v25.8.63 第三階段：線上自助儲值；v25.8.64
     //    第四階段：後台列表頁、Email 通知。v25.8.66 起手動加扣搬到「儲值金 ▸ 會員餘額」
-    //    頁籤；v25.8.67 起線上儲值改用「儲值金商品」，逐項處理取代整單處理，見 CLAUDE.md
-    //    「儲值金模組」一節）───────────────────────────────────────
+    //    頁籤；v25.8.67 起線上儲值改用「儲值金商品」，逐項處理取代整單處理；v25.8.68 起
+    //    「儲值金商品」本身改成獨立的 WooCommerce 商品類型，見 CLAUDE.md「儲值金模組」一節）
+    //    ───────────────────────────────────────
     if ( twshop_module_enabled( 'wallet' ) ) {
-        // 商品編輯頁「儲值金商品」欄位——不受模組開關以外的其他限制，跟商品折扣徽章
-        // 欄位（twshop_add_badge_product_fields()）掛在同一組 hook。
-        add_action( 'woocommerce_product_options_general_product_data', 'twshop_add_wallet_product_fields' );
-        add_action( 'woocommerce_process_product_meta', 'twshop_save_wallet_product_fields' );
+        // 「儲值金商品」的「加入購物車」按鈕掛模組開關——模組關閉時不該再讓顧客買得到，
+        // 因為下方付款完成入帳的 hook（`twshop_wallet_credit_on_payment_complete()`）也在
+        // 這個 if 區塊內，兩者必須同進退：只藏按鈕、入帳邏輯還在跑 vs. 按鈕還在、入帳邏輯
+        // 沒在跑（顧客付了錢卻拿不到儲值金）兩種不一致狀態都不能接受。商品編輯頁的欄位／
+        // 存檔／類型註冊本身則是「不受模組開關影響」的區塊，見下方「儲值金商品類型」
+        // 一節——那些是編輯能力，跟「現在能不能被顧客買到」是兩回事，不應該因為暫時關掉
+        // 模組就連既有商品的資料都編輯不了。
+        add_action( 'woocommerce_wallet_credit_add_to_cart', 'woocommerce_simple_add_to_cart', 30 );
 
         add_action( 'woocommerce_account_my-wallet_endpoint', 'twshop_my_wallet_endpoint_content' );
 
@@ -389,6 +394,27 @@ function twshop_membership_init() {
     add_filter( 'woocommerce_sale_flash', 'twshop_render_discount_badge', 999, 3 );
     add_action( 'woocommerce_product_options_general_product_data', 'twshop_add_badge_product_fields' );
     add_action( 'woocommerce_process_product_meta', 'twshop_save_badge_product_fields' );
+
+    // ── 儲值金商品類型（v25.8.68 起，wallet-topup.php）────────────────────────────
+    // 不綁 wallet 模組開關：這三個是 WooCommerce 認得「wallet_credit」這個商品類型本身
+    // 需要的最基本註冊（下拉選單選項／PHP 類別解析／編輯頁頁籤可見性），不是「儲值金
+    // 功能」這個業務邏輯——已經存在的儲值金商品，即使 wallet 模組被關掉，商品編輯頁的
+    // 類型下拉選單仍必須認得這個選項，否則瀏覽器會因為找不到對應的 <option> 而預設選到
+    // 第一個選項（通常是「簡單商品」），管理員只是開啟商品編輯頁存個檔（例如改個標題），
+    // 就會在毫無警訊的情況下把商品類型悄悄轉成簡單商品；`woocommerce_product_class`
+    // 沒有註冊的話，WooCommerce 想要在後台/前台任何地方把這個既有商品實例化時都會找不到
+    // 對應類別而出錯。真正決定「這個商品能不能被買、買了會不會入帳」的是下方 wallet
+    // 模組開關區塊裡的「加入購物車」按鈕與付款完成入帳 hook，那兩個才是業務邏輯，理所
+    // 當然要跟著模組開關走。
+    add_filter( 'product_type_selector', 'twshop_wallet_credit_register_product_type' );
+    add_filter( 'woocommerce_product_class', 'twshop_wallet_credit_product_class', 10, 2 );
+    add_filter( 'woocommerce_product_data_tabs', 'twshop_wallet_credit_product_data_tabs' );
+    // 編輯頁欄位／存檔／JS 同樣不綁模組開關——道理跟上面三個一樣：這些是「編輯這個商品
+    // 類型的能力」，不是「顧客現在買不買得到」，模組關閉不該連既有資料都動不了。真正的
+    // 業務開關（加入購物車按鈕、付款完成入帳）見下方 wallet 模組區塊。
+    add_action( 'woocommerce_product_options_general_product_data', 'twshop_add_wallet_credit_product_fields' );
+    add_action( 'woocommerce_process_product_meta_wallet_credit', 'twshop_save_wallet_credit_product_fields' );
+    add_action( 'admin_enqueue_scripts', 'twshop_enqueue_wallet_credit_product_admin_script' );
 
     // ── 商品網址（slug）改用商品編號 ────────────────────────────────────────
     // 跟商品折扣徽章一樣不綁模組開關：這是站台層級的網址設定，跟任何一個功能模組都沒有

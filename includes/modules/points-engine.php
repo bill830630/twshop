@@ -488,7 +488,7 @@ function twshop_award_points_on_order_complete( $order_id ) {
     foreach ( $order->get_items() as $item ) {
         $product = $item->get_product();
         if ( ! $product ) continue;
-        if ( 'yes' === $product->get_meta( '_twshop_wallet_product' ) ) continue;
+        if ( twshop_is_wallet_credit_product( $product ) ) continue;
         $items_data[] = array( 'product_id' => $product->get_id(), 'total' => $item->get_total() + $item->get_total_tax() );
     }
     // $total_excl_shipping 是「沒有設定限制獲得點數商品」時 twshop_get_earn_base_amount()
